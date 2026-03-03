@@ -1,0 +1,28 @@
+# Core dependencies
+python-dotenv==1.0.0
+pyyaml==6.0.1
+structlog==23.2.0
+
+# Async support
+aiohttp==3.9.1
+asyncio==3.4.3
+
+# Database
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+redis==5.0.1
+
+# Encryption
+cryptography==41.0.7
+
+# AI Providers
+openai==1.6.1
+anthropic==0.8.1
+
+# Testing (optional)
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Client control frameworks (to be installed separately based on needs)
+# wechaty>=0.10
+# Note: NapCatQQ requires separate installation and service setup
