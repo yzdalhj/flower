@@ -66,11 +66,25 @@ ai-companion/
 ├── tests/                   # 测试
 ├── docker/                  # Docker配置
 ├── docs/                    # 文档
+│   └── architecture.md      # 系统架构图
 ├── data/                    # 数据文件
 ├── requirements.txt         # 依赖
 ├── docker-compose.yml       # Docker编排
 └── README.md               # 项目说明
 ```
+
+## 系统架构
+
+详细的系统架构图请查看 [docs/architecture.md](docs/architecture.md)，包含以下内容：
+
+- **整体架构图** - 完整的系统分层架构
+- **账号管理架构** - 多账号管理设计
+- **对话处理流程** - 消息处理时序图
+- **多模型路由架构** - LLM路由器和故障切换
+- **记忆系统架构** - 情节/语义/情感记忆
+- **人格与情感系统** - 人格维度和情感维度
+- **表情包系统架构** - 表情包库和智能选择
+- **部署架构** - 生产环境部署方案
 
 ## Docker部署
 
