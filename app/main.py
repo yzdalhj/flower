@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.core import init_db
 
 
 @asynccontextmanager
@@ -16,7 +17,8 @@ async def lifespan(app: FastAPI):
     print(f"🌸 {settings.APP_NAME} 启动中...")
 
     # 初始化数据库
-    # TODO: 初始化数据库连接
+    await init_db()
+    print("✅ 数据库初始化完成")
 
     # 初始化向量数据库
     # TODO: 初始化ChromaDB
