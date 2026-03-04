@@ -1,28 +1,44 @@
-# Core dependencies
-python-dotenv==1.0.0
-pyyaml==6.0.1
-structlog==23.2.0
-
-# Async support
-aiohttp==3.9.1
-asyncio==3.4.3
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
 
 # Database
-asyncpg==0.29.0
-psycopg2-binary==2.9.9
+sqlalchemy==2.0.25
+alembic==1.13.1
+aiosqlite==0.19.0
+
+# Vector Database
+chromadb==0.4.22
+sentence-transformers==2.2.2
+
+# API Clients
+openai==1.10.0
+httpx==0.26.0
+
+# Task Queue
+celery==5.3.6
 redis==5.0.1
 
-# Encryption
-cryptography==41.0.7
+# Configuration
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
 
-# AI Providers
-openai==1.6.1
-anthropic==0.8.1
+# Utilities
+python-dateutil==2.8.2
+uuid==1.30
 
-# Testing (optional)
-pytest==7.4.3
-pytest-asyncio==0.21.1
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+httpx==0.26.0
 
-# Client control frameworks (to be installed separately based on needs)
-# wechaty>=0.10
-# Note: NapCatQQ requires separate installation and service setup
+# Code Quality
+black==24.1.1
+isort==5.13.2
+flake8==7.0.0
+mypy==1.8.0
+
+# Pre-commit
+pre-commit==3.6.0
