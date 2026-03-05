@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api import chat_router
 from app.config import get_settings
 from app.core import init_db
 
@@ -60,3 +61,7 @@ async def root():
 async def health_check():
     """健康检查"""
     return {"status": "healthy"}
+
+
+# 注册路由
+app.include_router(chat_router)

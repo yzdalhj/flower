@@ -28,6 +28,10 @@ python-dotenv==1.0.0
 # Utilities
 python-dateutil==2.8.2
 uuid==1.30
+langdetect==1.0.9
+
+# Image Processing (for emoji/sticker analysis)
+pillow==10.2.0
 
 # Testing
 pytest==7.4.4
