@@ -23,41 +23,41 @@ class EmotionResult:
 class ChineseEmotionLexicon:
     """中文情感词典"""
 
-    # 基础情绪词典
+    # 基础情绪词典 - 按优先级排序（长的优先匹配）
     EMOTION_WORDS = {
         "joy": [
             "开心",
             "高兴",
-            "棒",
-            "赞",
-            "哈哈",
-            "嘻嘻",
-            "爽",
-            "舒服",
+            "太好了",
+            "不错",
             "幸福",
             "满足",
             "快乐",
             "喜欢",
-            "爱",
             "优秀",
             "完美",
-            "太好了",
-            "不错",
+            "舒服",
+            "嘻嘻",
+            "哈哈",
+            "棒",
+            "赞",
+            "爽",
+            "爱",
         ],
         "sadness": [
             "难过",
             "伤心",
-            "哭",
             "失望",
+            "痛苦",
+            "悲伤",
+            "绝望",
+            "沮丧",
             "郁闷",
             "难受",
-            "痛苦",
             "委屈",
-            "沮丧",
-            "悲伤",
             "失落",
             "无助",
-            "绝望",
+            "哭",
         ],
         "anger": [
             "生气",
@@ -162,6 +162,35 @@ class ChineseEmotionLexicon:
         "绿茶": ("disgust", 0.4),
         "渣男": ("disgust", 0.5),
         "渣女": ("disgust", 0.5),
+    }
+
+    # 否定词 - 用于反转情感
+    NEGATION_WORDS = [
+        "不",
+        "没",
+        "无",
+        "非",
+        "莫",
+        "勿",
+        "不是",
+        "没有",
+        "不太",
+        "不怎么",
+    ]
+
+    # 程度副词 - 用于增强或减弱情感
+    INTENSIFIERS = {
+        "很": 1.3,
+        "非常": 1.5,
+        "特别": 1.5,
+        "十分": 1.5,
+        "超级": 1.6,
+        "太": 1.4,
+        "极其": 1.7,
+        "有点": 0.7,
+        "稍微": 0.6,
+        "略": 0.7,
+        "比较": 0.9,
     }
 
     # 表情包Unicode情感映射
@@ -273,13 +302,39 @@ class ChineseEmotionLexicon:
         "😾": (-0.5, 0.5),
     }
 
-    # 反讽模式
+    # 反讽模式 - 更严格的匹配，避免误判正常赞美
     IRONY_PATTERNS = [
-        r"真[的]*[不错|好|棒|优秀|厉害]",
-        r"[太|真|多].*[了|啊]",
+        r"真[的]*(?:不错|好|棒|优秀|厉害)[呢|啊|哦|哟]",
+        r"(?:太|真|多).*(?:恶心|差|糟|烂|烦|讨厌)",
+        r"(?:呵呵|哈哈).*(?:不错|好|棒)",
+        r"(?:不错|好|棒).*(?:呵呵|哈哈)",
         r"^呵呵$",
         r"^哈哈$",
     ]
+
+    def get_emotion(self, word: str) -> tuple:
+        """
+        获取词语的情感类别和强度
+
+        Args:
+            word: 输入词语
+
+        Returns:
+            (情感类别, 强度) 元组，如果没有找到则返回 (None, 0.0)
+        """
+        # 检查网络用语
+        if word in self.INTERNET_SLANG:
+            return self.INTERNET_SLANG[word]
+
+        # 检查情感词典
+        for emotion, words in self.EMOTION_WORDS.items():
+            if word in words:
+                # 根据词在列表中的位置计算强度（越靠前强度越高）
+                idx = words.index(word)
+                intensity = max(0.5, 1.0 - idx * 0.05)
+                return (emotion, intensity)
+
+        return (None, 0.0)
 
 
 class MultilingualEmotionAnalyzer:
@@ -335,14 +390,45 @@ class MultilingualEmotionAnalyzer:
         """中文情感分析"""
         emotion_scores = {emotion: 0.0 for emotion in self.lexicon.EMOTION_WORDS}
 
-        # 1. 关键词匹配
+        # 1. 关键词匹配 - 优先匹配长词
+        all_words = []
         for emotion, words in self.lexicon.EMOTION_WORDS.items():
             for word in words:
-                if word in text:
+                all_words.append((word, emotion))
+        # 按长度降序排序，优先匹配长词
+        all_words.sort(key=lambda x: len(x[0]), reverse=True)
+
+        matched_positions = set()  # 记录已匹配的位置
+
+        for word, emotion in all_words:
+            pos = text.find(word)
+            while pos != -1:
+                # 检查该位置是否已被匹配
+                if pos not in matched_positions:
+                    # 检查前面是否有否定词（在词前3个字符内）
+                    negation = self._check_negation(text, pos)
+                    # 检查前面是否有程度副词
+                    intensifier = self._check_intensifier(text, pos)
+
                     # 根据词频和长度加权
                     count = text.count(word)
                     weight = min(count * len(word) / 10, 1.0)
+
+                    # 应用程度修饰
+                    weight *= intensifier
+
+                    # 应用否定修饰（反转情感或减弱）
+                    if negation:
+                        # 否定词会反转情感或减弱
+                        weight *= -0.8
+
                     emotion_scores[emotion] += weight
+
+                    # 标记已匹配的位置
+                    for i in range(pos, pos + len(word)):
+                        matched_positions.add(i)
+
+                pos = text.find(word, pos + 1)
 
         # 2. 网络用语分析
         for slang, (emotion, intensity) in self.lexicon.INTERNET_SLANG.items():
@@ -466,6 +552,26 @@ class MultilingualEmotionAnalyzer:
 
         return total_valence / count, total_arousal / count
 
+    def _check_negation(self, text: str, pos: int) -> bool:
+        """检查位置前是否有否定词"""
+        # 检查前5个字符
+        start = max(0, pos - 5)
+        context = text[start:pos]
+        for neg_word in self.lexicon.NEGATION_WORDS:
+            if neg_word in context:
+                return True
+        return False
+
+    def _check_intensifier(self, text: str, pos: int) -> float:
+        """检查位置前是否有程度副词，返回强度系数"""
+        # 检查前4个字符
+        start = max(0, pos - 4)
+        context = text[start:pos]
+        for intensifier, factor in self.lexicon.INTENSIFIERS.items():
+            if intensifier in context:
+                return factor
+        return 1.0
+
     def _detect_irony(self, text: str) -> bool:
         """检测反讽"""
         for pattern in self.lexicon.IRONY_PATTERNS:
@@ -546,6 +652,83 @@ class MultilingualEmotionAnalyzer:
         d = max(-1.0, min(1.0, d))
 
         return p, a, d
+
+    def analyze_sticker(self, description: str) -> EmotionResult:
+        """
+        分析表情包/贴图描述
+
+        Args:
+            description: 表情包描述文本，如"用户发送了一个[大笑]表情包"
+
+        Returns:
+            情感分析结果
+        """
+        # 表情包关键词映射
+        sticker_keywords = {
+            "大笑": "joy",
+            "开心": "joy",
+            "高兴": "joy",
+            "笑": "joy",
+            "哭泣": "sadness",
+            "难过": "sadness",
+            "伤心": "sadness",
+            "哭": "sadness",
+            "生气": "anger",
+            "愤怒": "anger",
+            "怒": "anger",
+            "惊讶": "surprise",
+            "震惊": "surprise",
+            "惊": "surprise",
+            "害怕": "fear",
+            "恐惧": "fear",
+            "吓": "fear",
+        }
+
+        # 提取方括号中的关键词
+        import re
+
+        match = re.search(r"\[(.*?)\]", description)
+        if match:
+            keyword = match.group(1)
+            for k, emotion in sticker_keywords.items():
+                if k in keyword:
+                    return self._create_emotion_result(emotion, 0.8, "zh")
+
+        # 如果没有匹配到关键词，尝试分析整个描述
+        for keyword, emotion in sticker_keywords.items():
+            if keyword in description:
+                return self._create_emotion_result(emotion, 0.7, "zh")
+
+        # 默认返回中性
+        return self._create_emotion_result("neutral", 0.5, "zh")
+
+    def _create_emotion_result(
+        self, emotion: str, confidence: float, language: str
+    ) -> EmotionResult:
+        """创建情感结果"""
+        emotion_to_pad = {
+            "joy": (0.8, 0.6, 0.4),
+            "sadness": (-0.8, -0.4, -0.6),
+            "anger": (-0.6, 0.8, 0.4),
+            "fear": (-0.7, 0.7, -0.6),
+            "trust": (0.6, 0.2, 0.3),
+            "anticipation": (0.4, 0.4, 0.2),
+            "surprise": (0.2, 0.8, 0.1),
+            "disgust": (-0.7, 0.3, -0.2),
+            "neutral": (0.0, 0.3, 0.5),
+        }
+
+        v, a, d = emotion_to_pad.get(emotion, (0.0, 0.3, 0.5))
+
+        return EmotionResult(
+            valence=v,
+            arousal=a,
+            dominance=d,
+            primary_emotion=emotion,
+            emotion_scores={emotion: confidence, "neutral": 1 - confidence},
+            language=language,
+            confidence=confidence,
+        )
 
 
 # 全局分析器实例
