@@ -4,6 +4,13 @@ from app.models.account import Account
 from app.models.base import Base, BaseModel
 from app.models.conversation import Conversation, Message
 from app.models.memory import Memory, WorkingMemory
+from app.models.personality import (
+    BigFiveScores,
+    PersonalityConfig,
+    PersonalityDimension,
+    PersonalityTraits,
+    PERSONALITY_TEMPLATES,
+)
 from app.models.user import User, UserProfile
 
 __all__ = [
@@ -16,4 +23,9 @@ __all__ = [
     "Message",
     "Memory",
     "WorkingMemory",
+    "BigFiveScores",
+    "PersonalityConfig",
+    "PersonalityDimension",
+    "PersonalityTraits",
+    "PERSONALITY_TEMPLATES",
 ]
