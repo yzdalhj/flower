@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation, Message
+from app.services.humanize.humanize_processor import get_humanize_processor
 from app.services.llm.cost_optimizer import get_cost_optimizer
 from app.services.llm.llm_client import llm_router
 from app.services.memory.memory_store import MemoryStore
@@ -120,6 +121,10 @@ class DialogueProcessor:
                     messages=correction_messages,
                     temperature=0.7,
                 )
+
+        # 5.5 真人化处理 - 去除AI味
+        humanize_processor = get_humanize_processor()
+        llm_response.content = humanize_processor.process(llm_response.content)
 
         # 6. 保存AI回复
         await self._save_message(

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # AI模型API密钥
-    DEEPSEEK_API_KEY: Optional[str] = None
+    DEEPSEEK_API_KEY: str = "sk-xxx"
     KIMI_API_KEY: Optional[str] = None
     GLM_API_KEY: Optional[str] = None
     OPENAI_API_KEY: str = "2a27589a-ffb6-4b41-bfdc-c32b37d65acd"
