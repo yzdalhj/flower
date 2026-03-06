@@ -16,9 +16,9 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from app.models.personality import PersonalityConfig, PersonalityTraits, BigFiveScores
+from app.models.personality import PersonalityConfig
 
 
 @dataclass
@@ -106,9 +106,7 @@ class ParameterImportance:
         # 计算稳定性（方差越小越稳定）
         if len(self.value_history) >= 3:
             mean = sum(self.value_history) / len(self.value_history)
-            variance = sum((x - mean) ** 2 for x in self.value_history) / len(
-                self.value_history
-            )
+            variance = sum((x - mean) ** 2 for x in self.value_history) / len(self.value_history)
             stability = 1.0 / (1.0 + variance)  # 稳定性越高，重要性越高
 
             # 更新重要性（结合稳定性和更新频率）
@@ -170,9 +168,7 @@ class ReplayBuffer:
         """
         # 筛选经验
         if user_id:
-            experiences = [
-                exp for exp in self.buffer if exp.user_id == user_id
-            ]
+            experiences = [exp for exp in self.buffer if exp.user_id == user_id]
         else:
             experiences = list(self.buffer)
 
@@ -201,16 +197,12 @@ class ReplayBuffer:
 
         return sampled
 
-    def get_recent_experiences(
-        self, n: int, user_id: Optional[str] = None
-    ) -> List[Experience]:
+    def get_recent_experiences(self, n: int, user_id: Optional[str] = None) -> List[Experience]:
         """
         获取最近的N条经验
         """
         if user_id:
-            experiences = [
-                exp for exp in self.buffer if exp.user_id == user_id
-            ]
+            experiences = [exp for exp in self.buffer if exp.user_id == user_id]
         else:
             experiences = list(self.buffer)
 
@@ -231,9 +223,7 @@ class ReplayBuffer:
                 if exp.user_id == user_id and exp.user_satisfaction >= min_satisfaction
             ]
         else:
-            experiences = [
-                exp for exp in self.buffer if exp.user_satisfaction >= min_satisfaction
-            ]
+            experiences = [exp for exp in self.buffer if exp.user_satisfaction >= min_satisfaction]
 
         # 按满意度排序
         experiences.sort(key=lambda x: x.user_satisfaction, reverse=True)
@@ -279,8 +269,7 @@ class ReplayBuffer:
             "unique_users": len(self.user_index),
             "avg_satisfaction": sum(exp.user_satisfaction for exp in self.buffer)
             / len(self.buffer),
-            "avg_importance": sum(exp.importance for exp in self.buffer)
-            / len(self.buffer),
+            "avg_importance": sum(exp.importance for exp in self.buffer) / len(self.buffer),
             "oldest_experience": min(exp.timestamp for exp in self.buffer).isoformat(),
             "newest_experience": max(exp.timestamp for exp in self.buffer).isoformat(),
         }
@@ -382,9 +371,7 @@ class AntiForgetMechanism:
                         self.importance_map[param_name] = ParameterImportance(
                             parameter_name=param_name,
                             importance=param_data["importance"],
-                            last_updated=datetime.fromisoformat(
-                                param_data["last_updated"]
-                            ),
+                            last_updated=datetime.fromisoformat(param_data["last_updated"]),
                             update_count=param_data["update_count"],
                             value_history=param_data["value_history"],
                         )
@@ -511,9 +498,7 @@ class ContinualLearningService:
 
         return new_personality
 
-    def _calculate_adjustments(
-        self, feedback_signals: Dict[str, float]
-    ) -> Dict[str, float]:
+    def _calculate_adjustments(self, feedback_signals: Dict[str, float]) -> Dict[str, float]:
         """
         根据反馈信号计算参数调整量
         """
@@ -540,9 +525,7 @@ class ContinualLearningService:
 
         return adjustments
 
-    def _apply_adjustment(
-        self, personality: PersonalityConfig, param_path: str, delta: float
-    ):
+    def _apply_adjustment(self, personality: PersonalityConfig, param_path: str, delta: float):
         """
         应用参数调整（带防遗忘约束）
 
@@ -636,9 +619,7 @@ class ContinualLearningService:
         # 更新巩固时间
         self.last_consolidation[user_id] = datetime.now()
 
-    def _analyze_successful_traits(
-        self, experiences: List[Experience]
-    ) -> Dict[str, float]:
+    def _analyze_successful_traits(self, experiences: List[Experience]) -> Dict[str, float]:
         """
         分析成功经验中的人格特征
         返回平均的成功人格参数
@@ -689,9 +670,7 @@ class ContinualLearningService:
         }
 
         if user_id and user_id in self.last_consolidation:
-            stats["last_consolidation"] = self.last_consolidation[
-                user_id
-            ].isoformat()
+            stats["last_consolidation"] = self.last_consolidation[user_id].isoformat()
             stats["time_since_consolidation"] = (
                 datetime.now() - self.last_consolidation[user_id]
             ).total_seconds() / 3600.0  # 小时

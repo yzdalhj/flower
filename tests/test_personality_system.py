@@ -71,9 +71,7 @@ PersonalityPromptInjector = injector_module.PersonalityPromptInjector
 # 加载 langchain_memory
 spec_langchain = importlib.util.spec_from_file_location(
     "langchain_memory",
-    os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "app/services/langchain_memory.py"
-    ),
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "app/services/langchain_memory.py"),
 )
 langchain_module = importlib.util.module_from_spec(spec_langchain)
 spec_langchain.loader.exec_module(langchain_module)
@@ -85,9 +83,7 @@ DatabaseChatMessageHistory = langchain_module.DatabaseChatMessageHistory
 # 加载 continual_learning
 spec_continual = importlib.util.spec_from_file_location(
     "continual_learning",
-    os.path.join(
-        os.path.dirname(os.path.dirname(__file__)), "app/services/continual_learning.py"
-    ),
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "app/services/continual_learning.py"),
 )
 continual_module = importlib.util.module_from_spec(spec_continual)
 spec_continual.loader.exec_module(continual_module)
@@ -157,14 +153,14 @@ def test_big_five_dimensions():
 
     # 测试边界值
     try:
-        boundary_scores = BigFiveScores(
+        _ = BigFiveScores(
             openness=0.0,
             conscientiousness=100.0,
             extraversion=50.0,
             agreeableness=0.0,
             neuroticism=100.0,
         )
-        print_success(f"边界值测试通过: 0.0 和 100.0 都有效")
+        print_success("边界值测试通过: 0.0 和 100.0 都有效")
         passed += 1
     except Exception as e:
         print_error(f"边界值测试失败: {e}")
@@ -172,7 +168,7 @@ def test_big_five_dimensions():
 
     # 测试无效分数（应该抛出异常）
     try:
-        invalid_scores = BigFiveScores(openness=150.0)
+        _ = BigFiveScores(openness=150.0)
         print_error("无效分数测试失败: 应该抛出异常但没有")
     except ValueError:
         print_success("无效分数检测正确: 超出范围抛出 ValueError")
@@ -183,7 +179,7 @@ def test_big_five_dimensions():
 
     # 测试负数（应该抛出异常）
     try:
-        negative_scores = BigFiveScores(neuroticism=-10.0)
+        _ = BigFiveScores(neuroticism=-10.0)
         print_error("负数测试失败: 应该抛出异常但没有")
     except ValueError:
         print_success("负数检测正确: 负数抛出 ValueError")
@@ -199,10 +195,10 @@ def test_big_five_dimensions():
         restored = BigFiveScores.from_dict(data)
 
         if restored.openness == 80.0 and restored.extraversion == 60.0:
-            print_success(f"字典序列化/反序列化正确")
+            print_success("字典序列化/反序列化正确")
             passed += 1
         else:
-            print_error(f"字典转换数据不一致")
+            print_error("字典转换数据不一致")
     except Exception as e:
         print_error(f"字典转换失败: {e}")
     total += 1
@@ -235,18 +231,18 @@ def test_personality_initialization():
 
         # 验证 Big Five 配置
         if 0 <= default.big_five.openness <= 100:
-            print_success(f"默认模板 Big Five 配置有效")
+            print_success("默认模板 Big Five 配置有效")
             passed += 1
         else:
-            print_error(f"默认模板 Big Five 配置无效")
+            print_error("默认模板 Big Five 配置无效")
         total += 1
 
         # 验证扩展特质配置
         if 0 <= default.traits.empathy <= 100:
-            print_success(f"默认模板扩展特质配置有效")
+            print_success("默认模板扩展特质配置有效")
             passed += 1
         else:
-            print_error(f"默认模板扩展特质配置无效")
+            print_error("默认模板扩展特质配置无效")
         total += 1
 
         # 打印默认配置
@@ -275,7 +271,7 @@ def test_personality_initialization():
             print_success(f"自定义人格创建成功: {custom.name}")
             passed += 1
         else:
-            print_error(f"自定义人格数据不一致")
+            print_error("自定义人格数据不一致")
         total += 1
 
     except Exception as e:
@@ -299,10 +295,10 @@ def test_personality_initialization():
             and restored.big_five.openness == config.big_five.openness
             and restored.traits.humor == config.traits.humor
         ):
-            print_success(f"人格配置序列化/反序列化正确")
+            print_success("人格配置序列化/反序列化正确")
             passed += 1
         else:
-            print_error(f"人格配置序列化数据不一致")
+            print_error("人格配置序列化数据不一致")
         total += 1
 
     except Exception as e:
@@ -355,10 +351,10 @@ def test_speaking_style_mapping():
         calm_style = service.generate_speaking_style(service.get_personality("calm"))
 
         if default_style != cheerful_style and default_style != calm_style:
-            print_success(f"不同人格产生不同说话风格")
+            print_success("不同人格产生不同说话风格")
             passed += 1
         else:
-            print_error(f"不同人格产生相同说话风格")
+            print_error("不同人格产生相同说话风格")
 
         total += 1
 
@@ -372,11 +368,11 @@ def test_speaking_style_mapping():
         guidelines = service.generate_communication_guidelines(personality)
 
         if guidelines and len(guidelines) > 10:
-            print_success(f"沟通指南生成成功")
+            print_success("沟通指南生成成功")
             print(f"    指南预览:\n{guidelines[:150]}...")
             passed += 1
         else:
-            print_error(f"沟通指南为空或过短")
+            print_error("沟通指南为空或过短")
 
         total += 1
 
@@ -392,14 +388,14 @@ def test_speaking_style_mapping():
         # 随意度高的人格应该有禁用词汇
         if personality.traits.casualness > 60:
             if forbidden and len(forbidden) > 0:
-                print_success(f"禁用词汇生成成功")
+                print_success("禁用词汇生成成功")
                 print(f"    禁用词: {forbidden[:80]}...")
                 passed += 1
             else:
-                print_info(f"随意人格未生成禁用词汇（可选）")
+                print_info("随意人格未生成禁用词汇（可选）")
                 passed += 0.5
         else:
-            print_info(f"正式人格无需禁用词汇")
+            print_info("正式人格无需禁用词汇")
             passed += 1
 
         total += 1
@@ -453,17 +449,17 @@ def test_prompt_engineering_injection():
         )
 
         if "小明" in prompt_with_context and "程序员" in prompt_with_context:
-            print_success(f"用户上下文注入成功")
+            print_success("用户上下文注入成功")
             passed += 1
         else:
-            print_error(f"用户上下文注入失败")
+            print_error("用户上下文注入失败")
         total += 1
 
         if "愉悦度" in prompt_with_context or "情绪" in prompt_with_context:
-            print_success(f"情感上下文注入成功")
+            print_success("情感上下文注入成功")
             passed += 1
         else:
-            print_error(f"情感上下文注入失败")
+            print_error("情感上下文注入失败")
         total += 1
 
     except Exception as e:
@@ -484,15 +480,15 @@ def test_prompt_engineering_injection():
 
         # 验证系统消息在开头
         if enhanced[0]["role"] == "system":
-            print_success(f"系统消息正确插入到开头")
+            print_success("系统消息正确插入到开头")
             passed += 1
         else:
-            print_error(f"系统消息位置错误")
+            print_error("系统消息位置错误")
         total += 1
 
         # 验证原有消息保留
         if len(enhanced) == len(messages) + 1:
-            print_success(f"原有消息完整保留")
+            print_success("原有消息完整保留")
             passed += 1
         else:
             print_error(f"原有消息数量不对: 期望 {len(messages)+1}, 实际 {len(enhanced)}")
@@ -500,10 +496,10 @@ def test_prompt_engineering_injection():
 
         # 验证人格特征在系统消息中
         if "小花" in enhanced[0]["content"]:
-            print_success(f"人格特征注入到系统消息")
+            print_success("人格特征注入到系统消息")
             passed += 1
         else:
-            print_error(f"人格特征未注入")
+            print_error("人格特征未注入")
         total += 1
 
     except Exception as e:
@@ -521,10 +517,10 @@ def test_prompt_engineering_injection():
             and prompt_default != prompt_sarcastic
             and prompt_cheerful != prompt_sarcastic
         ):
-            print_success(f"不同人格产生不同提示词")
+            print_success("不同人格产生不同提示词")
             passed += 1
         else:
-            print_error(f"不同人格产生相同提示词")
+            print_error("不同人格产生相同提示词")
         total += 1
 
     except Exception as e:
@@ -536,11 +532,11 @@ def test_prompt_engineering_injection():
         summary = injector.get_personality_summary("default")
 
         if "小花" in summary and "Big Five" in summary:
-            print_success(f"人格摘要生成成功")
+            print_success("人格摘要生成成功")
             print_info(f"摘要预览:\n{summary[:200]}...")
             passed += 1
         else:
-            print_error(f"人格摘要内容不完整")
+            print_error("人格摘要内容不完整")
         total += 1
 
     except Exception as e:
@@ -566,7 +562,7 @@ def test_personality_service_operations():
             print_success(f"获取人格成功: {personality.name}")
             passed += 1
         else:
-            print_error(f"获取人格失败")
+            print_error("获取人格失败")
         total += 1
     except Exception as e:
         print_error(f"获取人格异常: {e}")
@@ -576,10 +572,10 @@ def test_personality_service_operations():
     try:
         nonexistent = service.get_personality("nonexistent_personality_12345")
         if nonexistent is None:
-            print_success(f"不存在的人格正确返回 None")
+            print_success("不存在的人格正确返回 None")
             passed += 1
         else:
-            print_error(f"不存在的人格应返回 None")
+            print_error("不存在的人格应返回 None")
         total += 1
     except Exception as e:
         print_error(f"获取不存在人格异常: {e}")
@@ -599,16 +595,16 @@ def test_personality_service_operations():
             print_success(f"创建自定义人格成功: {custom.name}")
             passed += 1
         else:
-            print_error(f"创建自定义人格数据不一致")
+            print_error("创建自定义人格数据不一致")
         total += 1
 
         # 验证可以重新获取
         retrieved = service.get_personality("test_validation_custom")
         if retrieved and retrieved.big_five.openness == 85.0:
-            print_success(f"重新获取自定义人格成功")
+            print_success("重新获取自定义人格成功")
             passed += 1
         else:
-            print_error(f"重新获取自定义人格失败")
+            print_error("重新获取自定义人格失败")
         total += 1
 
     except Exception as e:
@@ -646,7 +642,9 @@ class MockMemoryStore:
         self.memories = []
         self.working_memory = None
 
-    async def create_memory(self, user_id, memory_type, content, summary=None, importance=1.0, metadata=None):
+    async def create_memory(
+        self, user_id, memory_type, content, summary=None, importance=1.0, metadata=None
+    ):
         memory = {
             "id": f"mem_{len(self.memories)}",
             "user_id": user_id,
@@ -780,7 +778,7 @@ def test_langchain_memory_integration():
         try:
             stats = await memory_service.get_memory_stats()
             if "total_memories" in stats and "conversation_length" in stats:
-                print_success(f"记忆统计获取成功")
+                print_success("记忆统计获取成功")
                 print(f"    总记忆数: {stats['total_memories']}")
                 print(f"    对话长度: {stats['conversation_length']}")
                 passed += 1
@@ -874,8 +872,12 @@ def test_vector_database_storage():
 
         # 测试检索相关性
         try:
-            python_results = await memory_service.retrieve_relevant_memories(query="编程", n_results=3)
-            movie_results = await memory_service.retrieve_relevant_memories(query="电影", n_results=3)
+            python_results = await memory_service.retrieve_relevant_memories(
+                query="编程", n_results=3
+            )
+            movie_results = await memory_service.retrieve_relevant_memories(
+                query="电影", n_results=3
+            )
 
             if len(python_results) > 0 and len(movie_results) > 0:
                 print_success("检索相关性测试通过")
@@ -913,9 +915,13 @@ def test_memory_retrieval_and_context():
         )
 
         # 准备测试数据
-        await memory_service.save_interaction("我叫小明，是程序员", "很高兴认识你小明！", importance=8.0)
+        await memory_service.save_interaction(
+            "我叫小明，是程序员", "很高兴认识你小明！", importance=8.0
+        )
         await memory_service.save_interaction("我喜欢打游戏", "什么类型的游戏？", importance=5.0)
-        await memory_service.save_interaction("我最近在学机器学习", "机器学习很有趣！", importance=7.0)
+        await memory_service.save_interaction(
+            "我最近在学机器学习", "机器学习很有趣！", importance=7.0
+        )
 
         # 测试构建上下文
         try:
@@ -940,7 +946,9 @@ def test_memory_retrieval_and_context():
         # 测试格式化上下文
         try:
             context = await memory_service.build_context_for_prompt(
-                current_message="推荐一些学习资源", include_conversation=True, include_long_term=True
+                current_message="推荐一些学习资源",
+                include_conversation=True,
+                include_long_term=True,
             )
 
             formatted = await memory_service.format_context_for_llm(context)
@@ -1006,10 +1014,14 @@ def test_memory_retrieval_and_context():
             await memory_service.save_interaction("我喜欢吃火锅", "火锅真好吃！", importance=4.0)
 
             # 检索与"工作"相关的记忆
-            work_memories = await memory_service.retrieve_relevant_memories(query="工作", n_results=3)
+            work_memories = await memory_service.retrieve_relevant_memories(
+                query="工作", n_results=3
+            )
 
             # 检索与"美食"相关的记忆
-            food_memories = await memory_service.retrieve_relevant_memories(query="美食", n_results=3)
+            food_memories = await memory_service.retrieve_relevant_memories(
+                query="美食", n_results=3
+            )
 
             if len(work_memories) > 0 or len(food_memories) > 0:
                 print_success("记忆相关性检索成功")
@@ -1106,7 +1118,9 @@ def test_memory_context_formatting():
         # 测试仅长期记忆格式化
         try:
             context = await memory_service.build_context_for_prompt(
-                current_message="告诉我关于我的信息", include_conversation=False, include_long_term=True
+                current_message="告诉我关于我的信息",
+                include_conversation=False,
+                include_long_term=True,
             )
 
             formatted = await memory_service.format_context_for_llm(context)
@@ -1274,15 +1288,11 @@ def test_replay_buffer():
 
         # 测试获取高质量经验
         try:
-            high_quality = buffer.get_high_quality_experiences(
-                n=5, min_satisfaction=0.8
-            )
+            high_quality = buffer.get_high_quality_experiences(n=5, min_satisfaction=0.8)
 
             if len(high_quality) > 0:
                 print_success(f"获取高质量经验成功: {len(high_quality)} 条")
-                print(
-                    f"    满意度: {[f'{exp.user_satisfaction:.2f}' for exp in high_quality[:3]]}"
-                )
+                print(f"    满意度: {[f'{exp.user_satisfaction:.2f}' for exp in high_quality[:3]]}")
                 passed += 1
             else:
                 print_info("没有高质量经验（满意度 >= 0.8）")
@@ -1296,10 +1306,7 @@ def test_replay_buffer():
         try:
             stats = buffer.get_buffer_stats()
 
-            if (
-                "total_experiences" in stats
-                and stats["total_experiences"] == len(buffer.buffer)
-            ):
+            if "total_experiences" in stats and stats["total_experiences"] == len(buffer.buffer):
                 print_success("缓冲区统计正确")
                 print(f"    总经验数: {stats['total_experiences']}")
                 print(f"    平均满意度: {stats['avg_satisfaction']:.2f}")
@@ -1898,20 +1905,20 @@ def run_all_tests():
     if passed == total:
         print(f"\n{Colors.GREEN}✓ 所有测试通过！人格引擎系统验证完成。{Colors.RESET}")
         print(f"\n{Colors.GREEN}任务 4.1 完成：基础人格模型实现成功{Colors.RESET}")
-        print(f"  ✓ Big Five (OCEAN) 维度定义完成")
-        print(f"  ✓ 人格初始化配置完成")
-        print(f"  ✓ 人格到说话风格映射完成")
-        print(f"  ✓ Prompt Engineering 注入完成")
+        print("  ✓ Big Five (OCEAN) 维度定义完成")
+        print("  ✓ 人格初始化配置完成")
+        print("  ✓ 人格到说话风格映射完成")
+        print("  ✓ Prompt Engineering 注入完成")
         print(f"\n{Colors.GREEN}任务 4.2 完成：记忆系统集成成功{Colors.RESET}")
-        print(f"  ✓ LangChain Memory 集成完成")
-        print(f"  ✓ 向量数据库存储完成")
-        print(f"  ✓ 记忆检索与上下文注入完成")
-        print(f"  ✓ 记忆上下文格式化完成")
+        print("  ✓ LangChain Memory 集成完成")
+        print("  ✓ 向量数据库存储完成")
+        print("  ✓ 记忆检索与上下文注入完成")
+        print("  ✓ 记忆上下文格式化完成")
         print(f"\n{Colors.GREEN}任务 4.3 完成：持续学习能力实现成功{Colors.RESET}")
-        print(f"  ✓ 经验重放缓冲区 (Replay Buffer) 完成")
-        print(f"  ✓ 防遗忘机制 (EWC) 完成")
-        print(f"  ✓ 增量学习策略完成")
-        print(f"  ✓ 记忆巩固机制完成")
+        print("  ✓ 经验重放缓冲区 (Replay Buffer) 完成")
+        print("  ✓ 防遗忘机制 (EWC) 完成")
+        print("  ✓ 增量学习策略完成")
+        print("  ✓ 记忆巩固机制完成")
     else:
         print(f"\n{Colors.YELLOW}部分测试未通过，请检查实现。{Colors.RESET}")
 

@@ -1,14 +1,15 @@
 """人格服务 - 管理人格配置和说话风格映射"""
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
 from app.models.personality import (
+    PERSONALITY_TEMPLATES,
     BigFiveScores,
     PersonalityConfig,
     PersonalityTraits,
-    PERSONALITY_TEMPLATES,
 )
 
 
@@ -309,6 +310,143 @@ class PersonalityService:
         for pid, personality in self._personalities.items():
             result[pid] = f"{personality.name} - {personality.description}"
         return result
+
+    def update_personality_evolution(
+        self, personality_id: str, interaction_data: Dict[str, any]
+    ) -> PersonalityConfig:
+        """
+        更新人格演化历史
+        根据用户交互数据调整人格参数
+
+        Args:
+            personality_id: 人格ID
+            interaction_data: 交互数据，包含用户反馈、情感分析等
+
+        Returns:
+            更新后的人格配置
+        """
+        # 获取人格配置
+        personality = self.get_personality(personality_id)
+        if not personality:
+            personality = self.get_personality("default")
+
+        # 记录演化历史（只保存关键信息，避免循环引用）
+        evolution_record = {
+            "timestamp": datetime.now().isoformat(),
+            "interaction_data": interaction_data,
+            "before": {
+                "big_five": personality.big_five.to_dict(),
+                "traits": personality.traits.to_dict(),
+                "version": personality.version,
+            },
+        }
+
+        # 根据交互数据调整人格参数（平滑过渡）
+        self._adjust_personality(personality, interaction_data)
+
+        # 完成演化记录
+        evolution_record["after"] = {
+            "big_five": personality.big_five.to_dict(),
+            "traits": personality.traits.to_dict(),
+            "version": personality.version,
+        }
+        personality.evolution_history.append(evolution_record)
+        personality.updated_at = datetime.now()
+        personality.version += 1
+
+        # 保存更新后的人格
+        self.save_personality(personality)
+
+        return personality
+
+    def _adjust_personality(
+        self, personality: PersonalityConfig, interaction_data: Dict[str, any]
+    ) -> None:
+        """
+        根据交互数据调整人格参数
+        实现平滑过渡
+
+        Args:
+            personality: 人格配置
+            interaction_data: 交互数据
+        """
+        # 调整幅度（防止变化过大）
+        adjustment_factor = 0.05  # 5%的调整幅度
+
+        # 根据用户反馈调整
+        if interaction_data.get("user_feedback") == "positive":
+            # 增强当前人格特征
+            for trait_name, trait_value in personality.traits.to_dict().items():
+                setattr(
+                    personality.traits, trait_name, min(100, trait_value * (1 + adjustment_factor))
+                )
+        elif interaction_data.get("user_feedback") == "negative":
+            # 减弱当前人格特征
+            for trait_name, trait_value in personality.traits.to_dict().items():
+                setattr(
+                    personality.traits, trait_name, max(0, trait_value * (1 - adjustment_factor))
+                )
+
+        # 根据情感分析调整
+        emotion_valence = interaction_data.get("emotion_valence", 0)
+        if emotion_valence > 0.5:
+            # 积极情绪，增加温暖度和共情
+            personality.traits.warmth = min(
+                100, personality.traits.warmth * (1 + adjustment_factor)
+            )
+            personality.traits.empathy = min(
+                100, personality.traits.empathy * (1 + adjustment_factor)
+            )
+        elif emotion_valence < -0.5:
+            # 消极情绪，增加情绪稳定性
+            personality.traits.emotional_stability = min(
+                100, personality.traits.emotional_stability * (1 + adjustment_factor)
+            )
+
+        # 根据对话长度调整
+        response_length = interaction_data.get("response_length", 0)
+        if response_length > 100:
+            # 长回复，减少话痨程度
+            personality.traits.verbosity = max(
+                0, personality.traits.verbosity * (1 - adjustment_factor)
+            )
+        elif response_length < 20:
+            # 短回复，增加话痨程度
+            personality.traits.verbosity = min(
+                100, personality.traits.verbosity * (1 + adjustment_factor)
+            )
+
+    def get_personality_for_new_conversation(
+        self, user_id: str, previous_personality_id: Optional[str] = None
+    ) -> PersonalityConfig:
+        """
+        为新会话获取人格配置
+        实现跨会话人格平滑过渡
+
+        Args:
+            user_id: 用户ID
+            previous_personality_id: 上一个会话的人格ID
+
+        Returns:
+            人格配置
+        """
+        if previous_personality_id:
+            # 获取上一个会话的人格配置
+            previous_personality = self.get_personality(previous_personality_id)
+            if previous_personality:
+                # 创建新的人格配置，基于上一个配置
+                new_personality = PersonalityConfig(
+                    id=f"{previous_personality.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    name=previous_personality.name,
+                    description=previous_personality.description,
+                    big_five=previous_personality.big_five,
+                    traits=previous_personality.traits,
+                    evolution_history=previous_personality.evolution_history.copy(),
+                )
+                return new_personality
+
+        # 默认返回默认人格
+        return self.get_personality("default")
 
 
 # 全局单例

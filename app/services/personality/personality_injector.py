@@ -3,7 +3,7 @@
 from typing import Dict, List, Optional
 
 from app.models.personality import PersonalityConfig
-from app.services.personality_service import PersonalityService, get_personality_service
+from app.services.personality.personality_service import PersonalityService, get_personality_service
 
 
 class PersonalityPromptInjector:

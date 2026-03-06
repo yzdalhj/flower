@@ -21,6 +21,16 @@ class ModelType(str, Enum):
 
 
 @dataclass
+class LLMConfig:
+    """LLM连接配置"""
+
+    api_key: str
+    base_url: str
+    model: str
+    timeout: int = 30
+
+
+@dataclass
 class LLMResponse:
     """LLM响应"""
 
@@ -136,8 +146,8 @@ class OpenAIClient(BaseLLMClient):
     def __init__(self):
         super().__init__(
             api_key=settings.OPENAI_API_KEY or "",
-            base_url="https://api.openai.com/v1",
-            model="gpt-4o",
+            base_url="https://ark.cn-beijing.volces.com/api/coding/v3",
+            model="ark-code-latest",
         )
 
 

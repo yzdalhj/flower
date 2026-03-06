@@ -36,14 +36,20 @@ venv\Scripts\activate  # Windows
 pip install -r requirements.txt
 ```
 
-### 4. 配置环境变量
+### 4. 下载 spaCy 中文模型
+
+```bash
+python -m spacy download zh_core_web_sm
+```
+
+### 5. 配置环境变量
 
 ```bash
 cp .env.example .env
 # 编辑 .env 文件，填入你的API密钥
 ```
 
-### 5. 运行应用
+### 6. 运行应用
 
 ```bash
 uvicorn app.main:app --reload

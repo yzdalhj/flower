@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_db
-from app.services.dialogue import DialogueProcessor
+from app.services.llm.dialogue import DialogueProcessor
 
 router = APIRouter(prefix="/chat", tags=["对话"])
 

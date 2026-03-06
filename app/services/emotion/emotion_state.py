@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 # 避免循环导入，使用局部导入
 # from app.services.emotion_analyzer import EmotionResult
-from app.services.emotion_dynamics import (
+from app.services.emotion.emotion_dynamics import (
     AIEmotionalState,
     DecayCurve,
     EmotionDynamics,

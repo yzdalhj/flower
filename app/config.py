@@ -32,10 +32,10 @@ class Settings(BaseSettings):
     DEEPSEEK_API_KEY: Optional[str] = None
     KIMI_API_KEY: Optional[str] = None
     GLM_API_KEY: Optional[str] = None
-    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: str = "2a27589a-ffb6-4b41-bfdc-c32b37d65acd"
 
     # 模型配置
-    DEFAULT_MODEL: str = "deepseek"
+    DEFAULT_MODEL: str = "openai"
     FALLBACK_ENABLED: bool = True
     API_TIMEOUT: int = 30
 

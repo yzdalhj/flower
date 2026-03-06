@@ -29,6 +29,9 @@ class Conversation(BaseModel):
     message_count: Mapped[int] = Column(Integer, default=0)
     last_message_at: Mapped[datetime | None] = Column(DateTime, nullable=True)
 
+    # 人格配置
+    personality_id: Mapped[str] = Column(String(50), default="default")  # 关联的人格ID
+
     # 关系
     messages: Mapped[List["Message"]] = relationship(
         "Message", back_populates="conversation", cascade="all, delete-orphan"
