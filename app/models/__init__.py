@@ -11,6 +11,14 @@ from app.models.personality import (
     PersonalityDimension,
     PersonalityTraits,
 )
+from app.models.sticker import (
+    Sticker,
+    StickerEmotion,
+    StickerPersonalityMatch,
+    StickerSelection,
+    StickerSendStrategy,
+    StickerType,
+)
 from app.models.user import User, UserProfile
 
 __all__ = [
@@ -28,4 +36,10 @@ __all__ = [
     "PersonalityDimension",
     "PersonalityTraits",
     "PERSONALITY_TEMPLATES",
+    "Sticker",
+    "StickerType",
+    "StickerEmotion",
+    "StickerPersonalityMatch",
+    "StickerSelection",
+    "StickerSendStrategy",
 ]

@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import active_behavior_router, chat_router
+from app.api import active_behavior_router, chat_router, sticker_router
 from app.config import get_settings
 from app.core import init_db
 from app.services.active_behavior import scheduler
@@ -75,3 +75,4 @@ async def health_check():
 # 注册路由
 app.include_router(chat_router)
 app.include_router(active_behavior_router)
+app.include_router(sticker_router)

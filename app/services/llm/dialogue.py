@@ -12,6 +12,7 @@ from app.services.llm.llm_client import llm_router
 from app.services.memory.memory_store import MemoryStore
 from app.services.personality.personality_consistency import get_personality_consistency_checker
 from app.services.personality.personality_service import get_personality_service
+from app.services.sticker.sticker_selector import StickerSelector
 
 
 @dataclass
@@ -36,6 +37,8 @@ class DialogueResponse:
     emotion: Optional[Dict[str, float]] = None
     model_used: str = ""
     tokens_used: int = 0
+    sticker: Optional[Dict] = None  # 表情包信息
+    sticker_send_mode: str = "no_sticker"  # "only_sticker", "text_with_sticker", "no_sticker"
 
 
 class DialogueProcessor:
@@ -126,7 +129,34 @@ class DialogueProcessor:
         humanize_processor = get_humanize_processor()
         llm_response.content = humanize_processor.process(llm_response.content)
 
-        # 6. 保存AI回复
+        # 6. 智能选择表情包
+        sticker_info = None
+        sticker_send_mode = "no_sticker"
+        try:
+            # 分析回复的情绪
+            response_emotion = self._analyze_emotion(llm_response.content)
+
+            # 创建表情包选择器
+            sticker_selector = StickerSelector(self.session)
+
+            # 提取上下文关键词
+            context_keywords = self._extract_keywords(message + " " + llm_response.content)
+
+            # 选择表情包
+            sticker, sticker_send_mode = await sticker_selector.select_stickers_for_reply(
+                current_emotion=response_emotion,
+                personality_type=conversation.personality_id,
+                context_keywords=context_keywords,
+                is_serious_context=False,  # 可以根据内容判断
+            )
+
+            if sticker:
+                sticker_info = sticker.to_dict()
+        except Exception:
+            # 表情包选择失败不影响主流程
+            pass
+
+        # 7. 保存AI回复
         await self._save_message(
             conversation.id,
             "assistant",
@@ -135,10 +165,10 @@ class DialogueProcessor:
             tokens_used=llm_response.tokens_used,
         )
 
-        # 7. 更新工作记忆
+        # 8. 更新工作记忆
         await self._update_working_memory(user_id, conversation.id, message, llm_response.content)
 
-        # 8. 更新人格演化历史
+        # 9. 更新人格演化历史
         from app.services.personality.personality_service import get_personality_service
 
         personality_service = get_personality_service()
@@ -157,6 +187,8 @@ class DialogueProcessor:
             content=llm_response.content,
             model_used=llm_response.model,
             tokens_used=llm_response.tokens_used,
+            sticker=sticker_info,
+            sticker_send_mode=sticker_send_mode,
         )
 
     async def _get_or_create_conversation(
@@ -367,3 +399,90 @@ class DialogueProcessor:
             context=history,
             expires_minutes=30,
         )
+
+    def _analyze_emotion(self, text: str) -> Dict[str, float]:
+        """分析文本情绪"""
+        # 简单的关键词情绪分析
+        emotion_keywords = {
+            "happy": ["开心", "高兴", "哈哈", "棒", "赞", "好耶", "太好了", "😊", "😄", "😁"],
+            "excited": ["激动", "兴奋", "太棒了", "哇", "厉害", "牛", "冲", "🔥", "💪"],
+            "sad": ["难过", "伤心", "哭", "呜呜", "😢", "😭", "😔", "唉", "害"],
+            "angry": ["生气", "气死", "哼", "😤", "😠", "💢", "滚", "无语"],
+            "surprised": ["惊讶", "震惊", "不会吧", "真的吗", "😲", "😮", "哇哦"],
+            "confused": ["困惑", "不懂", "什么", "？", "🤔", "😕", "啊这"],
+            "loving": ["喜欢", "爱你", "可爱", "❤️", "😍", "🥰", "比心"],
+            "embarrassed": ["尴尬", "害羞", "😅", "😳", "捂脸", "汗"],
+            "proud": ["骄傲", "厉害", "得意", "😎", "✌️", "叉腰"],
+            "relaxed": ["放松", "悠闲", "😌", "☕", "喝茶", "摸鱼"],
+            "silly": ["搞怪", "哈哈", "😂", "🤣", "doge", "狗头"],
+            "supportive": ["加油", "没事", "抱抱", "摸摸头", "💪", "🤗"],
+        }
+
+        emotions = {}
+        text_lower = text.lower()
+
+        for emotion, keywords in emotion_keywords.items():
+            score = 0.0
+            for keyword in keywords:
+                if keyword in text_lower:
+                    score += 0.3  # 每个关键词增加0.3分
+            if score > 0:
+                emotions[emotion] = min(1.0, score)
+
+        # 如果没有检测到情绪，默认给一些中性情绪
+        if not emotions:
+            emotions = {"happy": 0.3, "relaxed": 0.2}
+
+        return emotions
+
+    def _extract_keywords(self, text: str) -> List[str]:
+        """提取关键词"""
+        # 简单的关键词提取（实际应用中可以使用NLP工具）
+        # 这里使用简单的分词和过滤
+        import re
+
+        # 去除标点符号
+        text = re.sub(r"[^\w\s]", " ", text)
+
+        # 分词
+        words = text.split()
+
+        # 过滤停用词（简单示例）
+        stop_words = {
+            "的",
+            "了",
+            "在",
+            "是",
+            "我",
+            "有",
+            "和",
+            "就",
+            "不",
+            "人",
+            "都",
+            "一",
+            "一个",
+            "上",
+            "也",
+            "很",
+            "到",
+            "说",
+            "要",
+            "去",
+            "你",
+            "会",
+            "着",
+            "没有",
+            "看",
+            "好",
+            "自己",
+            "这",
+        }
+
+        keywords = []
+        for word in words:
+            if len(word) > 1 and word not in stop_words:
+                keywords.append(word)
+
+        # 返回前5个关键词
+        return keywords[:5]
