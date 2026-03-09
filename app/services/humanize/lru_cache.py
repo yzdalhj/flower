@@ -26,7 +26,7 @@ class LRUCache:
         self.cache: OrderedDict[str, CacheEntry] = OrderedDict()
 
     def __contains__(self, key: str) -> bool:
-        """检查key是否存在且未过期"""
+        """检查key是否存在且未过期（不更新LRU顺序）"""
         if key not in self.cache:
             return False
         entry = self.cache[key]

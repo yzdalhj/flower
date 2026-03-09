@@ -5,9 +5,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import chat_router
+from app.api import active_behavior_router, chat_router
 from app.config import get_settings
 from app.core import init_db
+from app.services.active_behavior import scheduler
 
 
 @asynccontextmanager
@@ -24,9 +25,17 @@ async def lifespan(app: FastAPI):
     # 初始化向量数据库
     # TODO: 初始化ChromaDB
 
+    # 启动主动行为调度器
+    await scheduler.start()
+    print("✅ 主动行为系统已启动")
+
     yield
 
     # 关闭时
+    # 停止主动行为调度器
+    await scheduler.stop()
+    print("✅ 主动行为系统已停止")
+
     print(f"🌸 {settings.APP_NAME} 已关闭")
 
 
@@ -65,3 +74,4 @@ async def health_check():
 
 # 注册路由
 app.include_router(chat_router)
+app.include_router(active_behavior_router)

@@ -3,6 +3,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+# 导入所有模型以确保元数据包含它们
+import app.models  # noqa: F401
+import app.services.active_behavior.models  # noqa: F401
 from app.config import get_settings
 
 settings = get_settings()
