@@ -11,6 +11,7 @@ from app.models.personality import (
     PersonalityDimension,
     PersonalityTraits,
 )
+from app.models.prompt_template import PromptSection, PromptTemplate, PromptVariable
 from app.models.sticker import (
     Sticker,
     StickerEmotion,
@@ -36,6 +37,9 @@ __all__ = [
     "PersonalityDimension",
     "PersonalityTraits",
     "PERSONALITY_TEMPLATES",
+    "PromptTemplate",
+    "PromptSection",
+    "PromptVariable",
     "Sticker",
     "StickerType",
     "StickerEmotion",

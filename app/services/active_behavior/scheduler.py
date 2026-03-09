@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.core.database import AsyncSessionLocal
+from app.core.session import AsyncSessionLocal
 from app.models import User, UserProfile
 from app.services.active_behavior.models import (
     ActiveMessageRecord,

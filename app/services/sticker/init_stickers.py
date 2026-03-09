@@ -4,7 +4,6 @@ import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import AsyncSessionLocal
 from app.models.sticker import Sticker
 from app.services.sticker.sticker_library import DEFAULT_STICKERS
 from app.services.sticker.sticker_service import StickerService
@@ -60,6 +59,8 @@ async def init_default_stickers(db: AsyncSession, overwrite: bool = False) -> in
 
 async def main():
     """主函数"""
+    from app.core.session import AsyncSessionLocal
+
     async with AsyncSessionLocal() as db:
         await init_default_stickers(db, overwrite=False)
 

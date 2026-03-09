@@ -1,6 +1,7 @@
 """核心组件模块"""
 
-from app.core.database import AsyncSessionLocal, Base, engine, get_db, init_db
+from app.core.database import Base, engine, init_db
+from app.core.session import AsyncSessionLocal, get_db
 
 __all__ = [
     "engine",

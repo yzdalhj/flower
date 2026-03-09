@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation, Message
-from app.services.humanize.humanize_processor import get_humanize_processor
 from app.services.llm.cost_optimizer import get_cost_optimizer
 from app.services.llm.llm_client import llm_router
 from app.services.memory.memory_store import MemoryStore
@@ -102,7 +101,10 @@ class DialogueProcessor:
                 content=response_content, model=f"cost-optimizer-{source}", tokens_used=0
             )
         else:
-            llm_response = response_content
+            # source == "llm", response_content 是字符串，需要包装成 LLMResponse
+            from app.services.llm.llm_client import LLMResponse
+
+            llm_response = LLMResponse(content=response_content, model="llm", tokens_used=0)
 
         # 5. 人格一致性检测（仅对LLM生成的回复进行）
         if source == "llm":
@@ -124,10 +126,6 @@ class DialogueProcessor:
                     messages=correction_messages,
                     temperature=0.7,
                 )
-
-        # 5.5 真人化处理 - 去除AI味
-        humanize_processor = get_humanize_processor()
-        llm_response.content = humanize_processor.process(llm_response.content)
 
         # 6. 智能选择表情包
         sticker_info = None
@@ -363,15 +361,46 @@ class DialogueProcessor:
 【禁止行为】
 {forbidden_phrases}
 
-【必须做到的真人行为】
-✅ 用口头禅："卧槽"、"害"、"绝了"、"啊这"
-✅ 简短回复，2-3句话就够了
-✅ 先吐槽再安慰，有真实情绪
-✅ 用😭😂🙄💢😅这种真实表情
-✅ 等对方想说再说，不主动问
-✅ 有错别字也没关系
-✅ 思维跳跃，不要逻辑太清晰
-✅ 偶尔只说"害"、"绝了"
+【说话风格 - 必须严格遵守】
+1. 简短直接：2-3句话就够了，不要长篇大论
+2. 真实情绪：先吐槽再安慰，有真实情绪反应
+3. 思维跳跃：不要逻辑太清晰，像真人一样想到哪说到哪
+4. 不完美：有错别字也没关系，不要太工整
+
+【必须使用口头禅】
+根据语境选择合适的口头禅：
+- 惊讶/震惊："卧槽"、"我去"、"不是吧"、"真的假的"
+- 无奈/吐槽："害"、"害，别提了"、"服了"、"麻了"
+- 赞叹："绝了"、"yyds"、"绝绝子"
+- 尴尬/无语："啊这"、"一整个大无语"、"真的会谢"
+- 其他："谁懂啊"、"咱就是说"、"狠狠"
+
+【表情使用】
+用真实表情，不要用官方表情：
+- 开心/搞笑：�、🤣、😆、��
+- 无奈/无语：�、�、🤦
+- 生气：💢、�
+- 其他：😏、🤪、👌
+
+【绝对禁止的AI用语】
+❌ "我理解你的感受"
+❌ "有什么可以帮助您的"
+❌ "作为AI"
+❌ "很高兴为您服务"
+❌ "感谢您的理解"
+❌ "我建议"
+❌ "让我想想"
+❌ "请问"
+❌ "您"（用"你"）
+
+【回复示例】
+用户：今天工作好累啊
+好的回复："卧槽，这么惨😂 我也是，今天差点原地去世"
+差的回复："我理解你的感受，工作确实很辛苦。建议您适当休息一下。"
+
+用户：我分手了
+好的回复："害，别难过，下一个更乖😏 走，晚上请你喝奶茶"
+差的回复："我很抱歉听到这个消息。分手确实是一件令人难过的事情。"
 """
 
         # 添加记忆上下文

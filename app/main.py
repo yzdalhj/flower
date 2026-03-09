@@ -5,7 +5,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import active_behavior_router, chat_router, sticker_router
+from app.api import (
+    account_router,
+    active_behavior_router,
+    chat_router,
+    prompt_template_router,
+    sticker_router,
+)
 from app.config import get_settings
 from app.core import init_db
 from app.services.active_behavior import scheduler
@@ -14,29 +20,44 @@ from app.services.active_behavior import scheduler
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时
     settings = get_settings()
-    print(f"🌸 {settings.APP_NAME} 启动中...")
+
+    # 启动时
+    print("╔" + "═" * 50)
+    print(f"║  🌸 {settings.APP_NAME} v{app.version}")
+    print("╠" + "═" * 50)
 
     # 初始化数据库
+    print("║  📦 正在初始化数据库...", end=" ")
     await init_db()
-    print("✅ 数据库初始化完成")
+    print("✓")
 
     # 初始化向量数据库
     # TODO: 初始化ChromaDB
 
     # 启动主动行为调度器
+    print("║  ⏰ 正在启动主动行为调度器...", end=" ")
     await scheduler.start()
-    print("✅ 主动行为系统已启动")
+    print("✓")
+
+    print("╚" + "═" * 50)
+    print("✨ 服务已启动，访问 http://localhost:8000/docs 查看文档")
+    print()
 
     yield
 
     # 关闭时
-    # 停止主动行为调度器
-    await scheduler.stop()
-    print("✅ 主动行为系统已停止")
+    print()
+    print("╔" + "═" * 50)
+    print(f"║  🛑 {settings.APP_NAME} 正在关闭...")
+    print("╠" + "═" * 50)
 
-    print(f"🌸 {settings.APP_NAME} 已关闭")
+    print("║  ⏰ 正在停止主动行为调度器...", end=" ")
+    await scheduler.stop()
+    print("✓")
+
+    print("╚" + "═" * 50)
+    print(f"👋 感谢使用 {settings.APP_NAME}！")
 
 
 app = FastAPI(
@@ -76,3 +97,5 @@ async def health_check():
 app.include_router(chat_router)
 app.include_router(active_behavior_router)
 app.include_router(sticker_router)
+app.include_router(account_router)
+app.include_router(prompt_template_router)

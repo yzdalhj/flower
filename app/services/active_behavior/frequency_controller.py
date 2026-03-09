@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import AsyncSessionLocal
+from app.core.session import AsyncSessionLocal
 from app.services.active_behavior.models import (
     ActiveMessageRecord,
     ActiveMessageStatus,
