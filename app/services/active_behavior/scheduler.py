@@ -375,7 +375,7 @@ class ActiveBehaviorScheduler:
                         continue
 
                     # 发送消息（这里调用实际的发送接口）
-                    await self._send_message_to_user(message)
+                    await self._send_message_to_user(message, db)
 
                     # 更新消息状态
                     message.status = ActiveMessageStatus.SENT
@@ -393,11 +393,60 @@ class ActiveBehaviorScheduler:
                     await db.commit()
                     print(f"❌ 发送主动消息失败 {message.id}: {e}")
 
-    async def _send_message_to_user(self, message: ActiveMessageRecord):
-        """实际发送消息给用户（这里需要对接具体的消息发送通道）"""
-        # TODO: 实现实际的消息发送逻辑，对接微信/QQ等平台
-        # 暂时打印日志模拟发送
-        print(f"📤 发送主动消息给用户 {message.user_id}: {message.content}")
+    async def _send_message_to_user(self, message: ActiveMessageRecord, db: AsyncSession):
+        """实际发送消息给用户，创建对话并保存消息"""
+        from sqlalchemy import select
+
+        from app.models import User
+        from app.models.conversation import Conversation, Message
+
+        # 获取用户信息
+        result = await db.execute(select(User).where(User.id == message.user_id).limit(1))
+        user = result.scalar_one_or_none()
+
+        if not user:
+            raise ValueError(f"用户 {message.user_id} 不存在")
+
+        # 查找或创建活跃对话
+        result = await db.execute(
+            select(Conversation)
+            .where(Conversation.user_id == message.user_id)
+            .where(Conversation.status == "active")
+            .order_by(Conversation.updated_at.desc())
+            .limit(1)
+        )
+        conversation = result.scalar_one_or_none()
+
+        if not conversation:
+            # 创建新对话
+            conversation = Conversation(
+                user_id=message.user_id,
+                status="active",
+                personality_id="default",
+            )
+            db.add(conversation)
+            await db.commit()
+            await db.refresh(conversation)
+
+        # 保存AI主动发送的消息
+        msg = Message(
+            conversation_id=conversation.id,
+            role="assistant",
+            content=message.content,
+            model_used="active_behavior",
+            tokens_used=0,
+        )
+        db.add(msg)
+
+        # 更新对话时间
+        conversation.updated_at = datetime.utcnow()
+
+        # 更新用户最后交互时间
+        user.last_interaction_at = datetime.utcnow()
+
+        await db.commit()
+
+        print(f"📤 已发送主动消息给用户 {message.user_id}: {message.content[:50]}...")
 
     async def _get_or_create_user_preference(
         self, db: AsyncSession, user_id: str

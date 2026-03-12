@@ -9,7 +9,9 @@ from app.api import (
     account_router,
     active_behavior_router,
     chat_router,
+    conversation_router,
     prompt_template_router,
+    settings_router,
     sticker_router,
 )
 from app.config import get_settings
@@ -99,3 +101,5 @@ app.include_router(active_behavior_router)
 app.include_router(sticker_router)
 app.include_router(account_router)
 app.include_router(prompt_template_router)
+app.include_router(conversation_router)
+app.include_router(settings_router)

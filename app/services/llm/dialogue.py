@@ -154,16 +154,25 @@ class DialogueProcessor:
             # 表情包选择失败不影响主流程
             pass
 
-        # 7. 保存AI回复
-        await self._save_message(
-            conversation.id,
-            "assistant",
-            llm_response.content,
-            model_used=llm_response.model,
-            tokens_used=llm_response.tokens_used,
-        )
+        # 7. 拆分长句并保存AI回复
+        # 如果回复太长，拆分成多条短消息
+        message_parts = self._split_long_message(llm_response.content)
 
-        # 8. 更新工作记忆
+        for i, part in enumerate(message_parts):
+            await self._save_message(
+                conversation.id,
+                "assistant",
+                part,
+                model_used=llm_response.model if i == 0 else f"{llm_response.model}-part{i+1}",
+                tokens_used=llm_response.tokens_used // len(message_parts) if i == 0 else 0,
+            )
+            # 添加短暂延迟，模拟真实打字节奏
+            if i < len(message_parts) - 1:
+                import asyncio
+
+                await asyncio.sleep(0.5)
+
+        # 8. 更新工作记忆（使用完整内容）
         await self._update_working_memory(user_id, conversation.id, message, llm_response.content)
 
         # 9. 更新人格演化历史
@@ -366,14 +375,16 @@ class DialogueProcessor:
 2. 真实情绪：先吐槽再安慰，有真实情绪反应
 3. 思维跳跃：不要逻辑太清晰，像真人一样想到哪说到哪
 4. 不完美：有错别字也没关系，不要太工整
+5. 长句拆分：如果内容多，分成多条短消息发送，每条只表达一个意思
+   - 每条消息控制在15-25字以内
+   - 像真人打字一样，想到哪说到哪，不要一次性说完
+   - 可以分成2-3条消息连续发送，模拟真实聊天节奏
 
-【必须使用口头禅】
-根据语境选择合适的口头禅：
-- 惊讶/震惊："卧槽"、"我去"、"不是吧"、"真的假的"
-- 无奈/吐槽："害"、"害，别提了"、"服了"、"麻了"
-- 赞叹："绝了"、"yyds"、"绝绝子"
-- 尴尬/无语："啊这"、"一整个大无语"、"真的会谢"
-- 其他："谁懂啊"、"咱就是说"、"狠狠"
+【网络梗使用】
+可以适量使用网络流行语和梗，让对话更自然有趣：
+- 根据语境自然融入，不要生硬堆砌
+- 适度使用，不要每句话都带梗
+- 选择符合当下年轻人交流习惯的表达
 
 【表情使用】
 用真实表情，不要用官方表情：
@@ -515,3 +526,53 @@ class DialogueProcessor:
 
         # 返回前5个关键词
         return keywords[:5]
+
+    def _split_long_message(self, text: str) -> List[str]:
+        """拆分长消息为多条短消息"""
+        # 如果消息较短，直接返回
+        if len(text) <= 25:
+            return [text]
+
+        # 按标点符号拆分
+        import re
+
+        # 先按句号、问号、感叹号拆分
+        parts = re.split(r"([。！？]+)", text)
+
+        # 合并标点符号到前一句
+        sentences = []
+        for i in range(0, len(parts) - 1, 2):
+            if parts[i]:
+                sentences.append(parts[i] + (parts[i + 1] if i + 1 < len(parts) else ""))
+        if len(parts) % 2 == 1 and parts[-1]:
+            sentences.append(parts[-1])
+
+        # 如果没有拆分成功（没有标点），按长度强制拆分
+        if not sentences:
+            sentences = [text[i : i + 20] for i in range(0, len(text), 20)]
+
+        # 合并短句，确保每条消息不要太短
+        result = []
+        current = ""
+        for sentence in sentences:
+            if len(current) + len(sentence) <= 25:
+                current += sentence
+            else:
+                if current:
+                    result.append(current.strip())
+                current = sentence
+        if current:
+            result.append(current.strip())
+
+        # 如果拆分后只有一条且原长度超过40，强制拆分
+        if len(result) == 1 and len(text) > 40:
+            mid = len(text) // 2
+            # 在中间附近找空格或标点
+            split_pos = mid
+            for i in range(mid - 10, mid + 10):
+                if i < len(text) and text[i] in "，。！？ ":
+                    split_pos = i + 1
+                    break
+            result = [text[:split_pos].strip(), text[split_pos:].strip()]
+
+        return result if result else [text]
