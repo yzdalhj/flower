@@ -38,6 +38,7 @@ class DialogueResponse:
     tokens_used: int = 0
     sticker: Optional[Dict] = None  # 表情包信息
     sticker_send_mode: str = "no_sticker"  # "only_sticker", "text_with_sticker", "no_sticker"
+    conversation_id: Optional[str] = None  # 对话ID
 
 
 class DialogueProcessor:
@@ -86,6 +87,7 @@ class DialogueProcessor:
             return await llm_router.chat(
                 messages=messages,
                 temperature=0.7,
+                db=self.session,
             )
 
         response_content, source = await cost_optimizer.process(
@@ -125,6 +127,7 @@ class DialogueProcessor:
                 llm_response = await llm_router.chat(
                     messages=correction_messages,
                     temperature=0.7,
+                    db=self.session,
                 )
 
         # 6. 智能选择表情包
@@ -190,12 +193,51 @@ class DialogueProcessor:
             conversation.personality_id, interaction_data
         )
 
+        # 10. 更新会话标题和预览（如果是新会话或消息数较少）
+        try:
+            await self._update_conversation_title(conversation, message, llm_response.content)
+        except Exception as e:
+            print(f"[DialogueProcessor] 更新会话标题失败: {e}")
+
+        # 11. 异步提取对话记忆（不阻塞回复）
+        try:
+            from app.services.memory.conversation_memory_extractor import (
+                ConversationMemoryExtractor,
+            )
+
+            extractor = ConversationMemoryExtractor(self.session)
+
+            # 获取本次对话的所有消息
+            from sqlalchemy import select
+
+            result = await self.session.execute(
+                select(Message)
+                .where(Message.conversation_id == conversation.id)
+                .order_by(Message.created_at.asc())
+            )
+            conversation_messages = result.scalars().all()
+
+            # 提取记忆（异步执行，不等待结果）
+            import asyncio
+
+            asyncio.create_task(
+                extractor.extract_from_conversation(
+                    user_id=user_id,
+                    conversation_id=conversation.id,
+                    messages=conversation_messages,
+                )
+            )
+        except Exception as e:
+            # 记忆提取失败不影响主流程
+            print(f"[DialogueProcessor] 记忆提取失败: {e}")
+
         return DialogueResponse(
             content=llm_response.content,
             model_used=llm_response.model,
             tokens_used=llm_response.tokens_used,
             sticker=sticker_info,
             sticker_send_mode=sticker_send_mode,
+            conversation_id=conversation.id,
         )
 
     async def _get_or_create_conversation(
@@ -206,6 +248,9 @@ class DialogueProcessor:
     ) -> Conversation:
         """获取或创建会话"""
         from sqlalchemy import select
+
+        # 确保用户存在
+        await self._ensure_user_exists(user_id, account_id)
 
         if conversation_id:
             result = await self.session.execute(
@@ -248,6 +293,28 @@ class DialogueProcessor:
         await self.session.refresh(conversation)
         return conversation
 
+    async def _ensure_user_exists(self, user_id: str, account_id: str) -> None:
+        """确保用户存在，如果不存在则创建"""
+        from sqlalchemy import select
+
+        from app.models.user import User
+
+        result = await self.session.execute(select(User).where(User.id == user_id).limit(1))
+        user = result.scalar_one_or_none()
+
+        if not user:
+            # 创建新用户
+            user = User(
+                id=user_id,
+                account_id=account_id,
+                platform_user_id=user_id,
+                platform_type="web",
+                nickname="用户" + user_id[:6],
+            )
+            self.session.add(user)
+            await self.session.commit()
+            print(f"[DialogueProcessor] 创建新用户: {user_id}")
+
     async def _save_message(
         self,
         conversation_id: str,
@@ -257,6 +324,11 @@ class DialogueProcessor:
         tokens_used: Optional[int] = None,
     ) -> Message:
         """保存消息"""
+        from sqlalchemy import select
+
+        from app.models.conversation import Conversation
+
+        # 保存消息
         message = Message(
             conversation_id=conversation_id,
             role=role,
@@ -267,6 +339,17 @@ class DialogueProcessor:
         self.session.add(message)
         await self.session.commit()
         await self.session.refresh(message)
+
+        # 更新会话的消息数和最后消息时间
+        result = await self.session.execute(
+            select(Conversation).where(Conversation.id == conversation_id)
+        )
+        conversation = result.scalar_one_or_none()
+        if conversation:
+            conversation.message_count += 1
+            conversation.last_message_at = message.created_at
+            await self.session.commit()
+
         return message
 
     async def _build_context(
@@ -291,6 +374,12 @@ class DialogueProcessor:
         # 获取相关记忆
         memory_context = await self.memory_store.get_context_for_prompt(user_id, message)
 
+        # 获取用户画像
+        from app.services.profile.profile_service import UserProfileService
+
+        profile_service = UserProfileService()
+        user_profile = await profile_service.get_profile(user_id)
+
         # 构建上下文
         context = DialogueContext(
             user_id=user_id,
@@ -299,6 +388,7 @@ class DialogueProcessor:
             user_message=message,
             history=history,
             memories=[m.to_dict() for m in memory_context["long_term_memories"]],
+            user_profile=user_profile.to_dict() if user_profile else None,
             personality_id=conversation.personality_id,
         )
 
@@ -310,6 +400,7 @@ class DialogueProcessor:
         """获取会话历史"""
         from sqlalchemy import select
 
+        # 获取最近的消息（按时间倒序获取，然后反转保持正序）
         result = await self.session.execute(
             select(Message)
             .where(Message.conversation_id == conversation_id)
@@ -318,7 +409,7 @@ class DialogueProcessor:
         )
         messages = result.scalars().all()
 
-        # 转换为OpenAI格式
+        # 转换为OpenAI格式（反转回正序：从早到晚）
         history = []
         for msg in reversed(list(messages)):
             history.append({"role": msg.role, "content": msg.content})
@@ -414,6 +505,17 @@ class DialogueProcessor:
 差的回复："我很抱歉听到这个消息。分手确实是一件令人难过的事情。"
 """
 
+        # 添加用户画像
+        if context.user_profile:
+            prompt += "\n【用户画像】\n"
+            if context.user_profile.get("interests"):
+                prompt += f"兴趣爱好: {', '.join(context.user_profile['interests'])}\n"
+            if context.user_profile.get("preferences"):
+                prefs = context.user_profile["preferences"]
+                if isinstance(prefs, dict):
+                    for key, value in prefs.items():
+                        prompt += f"{key}: {value}\n"
+
         # 添加记忆上下文
         if context.memories:
             prompt += "\n【你记得关于用户的事】\n"
@@ -439,6 +541,64 @@ class DialogueProcessor:
             context=history,
             expires_minutes=30,
         )
+
+    async def _update_conversation_title(
+        self,
+        conversation: Any,
+        user_message: str,
+        ai_response: str,
+    ) -> None:
+        """更新会话标题和预览"""
+        # 更新最后消息预览
+        preview = user_message[:50] + "..." if len(user_message) > 50 else user_message
+        conversation.last_message_preview = preview
+
+        # 如果消息数小于4条，生成标题
+        if conversation.message_count <= 4 and not conversation.title:
+            # 使用LLM生成标题
+            title = await self._generate_conversation_title(user_message, ai_response)
+            if title:
+                conversation.title = title
+
+        await self.session.commit()
+
+    async def _generate_conversation_title(
+        self,
+        user_message: str,
+        ai_response: str,
+    ) -> str:
+        """使用LLM生成会话标题"""
+        prompt = f"""请根据以下对话内容，生成一个简短的会话标题（10个字以内）。
+
+用户: {user_message[:100]}
+AI: {ai_response[:100]}
+
+标题要求:
+1. 简短精炼，10个字以内
+2. 概括对话主题
+3. 不要使用标点符号
+4. 直接返回标题，不要解释
+
+标题:"""
+
+        try:
+            response = await llm_router.chat(
+                messages=[
+                    {"role": "system", "content": "你是一个标题生成助手。"},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.5,
+            )
+
+            title = response.content.strip().replace('"', "").replace('"', "")
+            # 限制长度
+            if len(title) > 15:
+                title = title[:15]
+            return title
+
+        except Exception as e:
+            print(f"[DialogueProcessor] 生成标题失败: {e}")
+            return ""
 
     def _analyze_emotion(self, text: str) -> Dict[str, float]:
         """分析文本情绪"""

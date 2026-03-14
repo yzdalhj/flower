@@ -58,7 +58,7 @@ class MemoryStore:
             importance=importance,
             occurred_at=occurred_at or datetime.utcnow(),
             expires_at=expires_at,
-            metadata=json.dumps(metadata) if metadata else None,
+            meta_data=json.dumps(metadata) if metadata else None,
             vector_id=vector_id,
         )
         self.session.add(memory)

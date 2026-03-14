@@ -10,9 +10,11 @@ from app.api import (
     active_behavior_router,
     chat_router,
     conversation_router,
+    memory_router,
     prompt_template_router,
     settings_router,
     sticker_router,
+    user_router,
 )
 from app.config import get_settings
 from app.core import init_db
@@ -42,6 +44,14 @@ async def lifespan(app: FastAPI):
     await scheduler.start()
     print("✓")
 
+    # 启动记忆调度器
+    print("║  🧠 正在启动记忆调度器...", end=" ")
+    from app.services.memory.memory_scheduler import get_memory_scheduler
+
+    memory_scheduler = get_memory_scheduler()
+    await memory_scheduler.start()
+    print("✓")
+
     print("╚" + "═" * 50)
     print("✨ 服务已启动，访问 http://localhost:8000/docs 查看文档")
     print()
@@ -56,6 +66,10 @@ async def lifespan(app: FastAPI):
 
     print("║  ⏰ 正在停止主动行为调度器...", end=" ")
     await scheduler.stop()
+    print("✓")
+
+    print("║  🧠 正在停止记忆调度器...", end=" ")
+    await memory_scheduler.stop()
     print("✓")
 
     print("╚" + "═" * 50)
@@ -103,3 +117,5 @@ app.include_router(account_router)
 app.include_router(prompt_template_router)
 app.include_router(conversation_router)
 app.include_router(settings_router)
+app.include_router(memory_router)
+app.include_router(user_router)

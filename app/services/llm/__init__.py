@@ -4,13 +4,10 @@ from app.services.llm.cost_optimizer import CostOptimizer, get_cost_optimizer
 from app.services.llm.dialogue import DialogueContext, DialogueProcessor, DialogueResponse
 from app.services.llm.llm_client import (
     BaseLLMClient,
-    DeepSeekClient,
-    GLMClient,
-    KimiClient,
+    LLMConfig,
     LLMResponse,
     LLMRouter,
     ModelType,
-    OpenAIClient,
     llm_router,
 )
 from app.services.llm.prompt_builder import PromptBuilder, PromptContext
@@ -18,12 +15,9 @@ from app.services.llm.prompt_builder import PromptBuilder, PromptContext
 __all__ = [
     # llm_client
     "ModelType",
+    "LLMConfig",
     "LLMResponse",
     "BaseLLMClient",
-    "DeepSeekClient",
-    "KimiClient",
-    "GLMClient",
-    "OpenAIClient",
     "LLMRouter",
     "llm_router",
     # dialogue

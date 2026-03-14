@@ -1,5 +1,7 @@
 """对话API"""
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +27,7 @@ class ChatResponse(BaseModel):
     content: str
     model_used: str
     tokens_used: int
+    conversation_id: Optional[str] = None
 
 
 @router.post("/send", response_model=ChatResponse)
@@ -56,6 +59,7 @@ async def send_message(
             content=response.content,
             model_used=response.model_used,
             tokens_used=response.tokens_used,
+            conversation_id=response.conversation_id,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -87,5 +91,46 @@ async def get_history(
                 "created_at": msg.created_at.isoformat(),
             }
             for msg in messages
+        ],
+    }
+
+
+@router.get("/conversations/{account_id}")
+async def get_conversations(
+    account_id: str,
+    limit: int = 10,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """获取账号的对话列表"""
+    from sqlalchemy import select
+
+    from app.models.conversation import Conversation
+    from app.models.user import User
+
+    # 通过 user 表关联查询
+    result = await db.execute(
+        select(Conversation)
+        .join(User, Conversation.user_id == User.id)
+        .where(User.account_id == account_id)
+        .order_by(Conversation.last_message_at.desc().nullslast())
+        .limit(limit)
+    )
+    conversations = result.scalars().all()
+
+    return {
+        "conversations": [
+            {
+                "id": conv.id,
+                "user_id": conv.user_id,
+                "account_id": account_id,
+                "title": conv.title or f"对话 {conv.id[:8]}",
+                "last_message_preview": conv.last_message_preview,
+                "message_count": conv.message_count,
+                "started_at": conv.started_at.isoformat(),
+                "last_message_at": (
+                    conv.last_message_at.isoformat() if conv.last_message_at else None
+                ),
+            }
+            for conv in conversations
         ],
     }

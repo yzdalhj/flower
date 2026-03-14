@@ -23,6 +23,8 @@ class ConversationListItem(BaseModel):
     user_id: str
     account_id: str
     user_nickname: Optional[str]
+    title: Optional[str]
+    last_message_preview: Optional[str]
     status: str
     message_count: int
     last_message_at: Optional[datetime]
@@ -101,18 +103,14 @@ async def get_conversations(
     Returns:
         对话列表
     """
-    # 构建基础查询
-    from app.models.account import Account
+    print(f"[DEBUG] get_conversations: account_id={account_id}, user_id={user_id}, status={status}")
 
-    base_query = select(Conversation).options(
-        selectinload(Conversation.user).selectinload(User.account)
-    )
-    _ = Account  # 避免 F401 未使用导入警告
+    # 构建基础查询 - 直接查询 Conversation 表
+    base_query = select(Conversation)
 
     # 应用筛选条件
-    if account_id:
-        base_query = base_query.where(Conversation.user.has(User.account_id == account_id))
     if user_id:
+        print(f"[DEBUG] Filtering by user_id: {user_id}")
         base_query = base_query.where(Conversation.user_id == user_id)
     if status:
         base_query = base_query.where(Conversation.status == status)
@@ -130,14 +128,17 @@ async def get_conversations(
 
     # 构建响应
     items = []
+    print(f"[DEBUG] Found {len(conversations)} conversations, total={total}")
     for conv in conversations:
-        account_name = conv.user.account.name if conv.user and conv.user.account else None
+        print(f"[DEBUG] Conversation: id={conv.id}, user_id={conv.user_id}")
         items.append(
             ConversationListItem(
                 id=conv.id,
                 user_id=conv.user_id,
-                account_id=conv.user.account_id if conv.user else "",
-                user_nickname=account_name,
+                account_id=account_id or "",  # 使用传入的 account_id
+                user_nickname=None,  # 暂时无法获取，因为 users 表为空
+                title=conv.title,
+                last_message_preview=conv.last_message_preview,
                 status=conv.status,
                 message_count=conv.message_count,
                 last_message_at=conv.last_message_at,

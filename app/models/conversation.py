@@ -25,6 +25,10 @@ class Conversation(BaseModel):
     started_at: Mapped[datetime] = Column(DateTime, default=datetime.utcnow)
     ended_at: Mapped[datetime | None] = Column(DateTime, nullable=True)
 
+    # 会话标题和预览
+    title: Mapped[str | None] = Column(String(200), nullable=True)  # 会话标题
+    last_message_preview: Mapped[str | None] = Column(String(100), nullable=True)  # 最后消息预览
+
     # 会话统计
     message_count: Mapped[int] = Column(Integer, default=0)
     last_message_at: Mapped[datetime | None] = Column(DateTime, nullable=True)

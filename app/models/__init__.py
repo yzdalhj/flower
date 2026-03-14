@@ -12,6 +12,7 @@ from app.models.personality import (
     PersonalityTraits,
 )
 from app.models.prompt_template import PromptSection, PromptTemplate, PromptVariable
+from app.models.settings import LLMProvider, ModelConfig, SystemSettings
 from app.models.sticker import (
     Sticker,
     StickerEmotion,
@@ -46,4 +47,7 @@ __all__ = [
     "StickerPersonalityMatch",
     "StickerSelection",
     "StickerSendStrategy",
+    "SystemSettings",
+    "LLMProvider",
+    "ModelConfig",
 ]
