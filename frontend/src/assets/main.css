@@ -1,0 +1,116 @@
+/* 主样式文件 */
+
+/* TDesign 变量覆盖 */
+:root {
+  --td-brand-color: #667eea;
+  --td-brand-color-light: #e7f3ff;
+  --td-brand-color-focus: #f0f5ff;
+  --td-brand-color-disabled: #b3c7ff;
+  --td-brand-color-hover: #5a6fd6;
+  --td-brand-color-active: #4a5fc6;
+
+  --td-success-color: #4ecdc4;
+  --td-warning-color: #fdcb6e;
+  --td-error-color: #ff6b6b;
+
+  --td-radius-default: 8px;
+  --td-radius-large: 12px;
+}
+
+/* 通用工具类 */
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.flex {
+  display: flex;
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-2 {
+  gap: 0.5rem;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.gap-6 {
+  gap: 1.5rem;
+}
+
+.p-4 {
+  padding: 1rem;
+}
+
+.p-6 {
+  padding: 1.5rem;
+}
+
+.m-4 {
+  margin: 1rem;
+}
+
+.m-6 {
+  margin: 1.5rem;
+}
+
+/* 卡片样式 */
+.card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.3s;
+}
+
+.card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* 渐变背景 */
+.gradient-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-success {
+  background: linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%);
+}
+
+.gradient-warning {
+  background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+}
+
+.gradient-danger {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+}
+
+/* 文字渐变 */
+.text-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
