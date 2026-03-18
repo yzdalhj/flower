@@ -28,6 +28,8 @@ class ChatResponse(BaseModel):
     model_used: str
     tokens_used: int
     conversation_id: Optional[str] = None
+    sticker_url: Optional[str] = None  # 表情包图片URL
+    sticker_name: Optional[str] = None  # 表情包名称
 
 
 @router.post("/send", response_model=ChatResponse)
@@ -55,11 +57,23 @@ async def send_message(
             conversation_id=request.conversation_id,
         )
 
+        # 提取表情包信息
+        sticker_url = None
+        sticker_name = None
+        if response.sticker:
+            sticker_url = response.sticker.get("url")
+            sticker_name = response.sticker.get("name")
+            print(f"[ChatAPI] 返回表情包 - name: {sticker_name}, url: {sticker_url}")
+        else:
+            print("[ChatAPI] 无表情包返回")
+
         return ChatResponse(
             content=response.content,
             model_used=response.model_used,
             tokens_used=response.tokens_used,
             conversation_id=response.conversation_id,
+            sticker_url=sticker_url,
+            sticker_name=sticker_name,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -89,6 +103,7 @@ async def get_history(
                 "role": msg.role,
                 "content": msg.content,
                 "created_at": msg.created_at.isoformat(),
+                "sticker_id": msg.sticker_id,
             }
             for msg in messages
         ],

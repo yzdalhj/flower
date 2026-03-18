@@ -35,6 +35,9 @@ class ConversationMemoryExtractor:
         "preference": "偏好记忆",  # 喜好、厌恶
         "habit": "习惯记忆",  # 行为习惯
         "relationship": "关系记忆",  # 人际关系
+        "ai_promise": "AI承诺",  # AI对用户做出的承诺
+        "ai_suggestion": "AI建议",  # AI给用户的建议
+        "shared_topic": "共同话题",  # 双方共同讨论的话题
     }
 
     def __init__(self, session: AsyncSession):
@@ -64,7 +67,9 @@ class ConversationMemoryExtractor:
         conversation_text = self._build_conversation_text(messages)
 
         # 使用LLM分析对话，提取记忆
-        extracted_memories = await self._analyze_with_llm(conversation_text)
+        extracted_memories = await self._analyze_with_llm(
+            conversation_text, user_id, conversation_id
+        )
 
         # 保存记忆
         saved_memories = []
@@ -83,15 +88,18 @@ class ConversationMemoryExtractor:
             lines.append(f"{role}: {msg.content}")
         return "\n".join(lines)
 
-    async def _analyze_with_llm(self, conversation_text: str) -> List[Dict[str, Any]]:
+    async def _analyze_with_llm(
+        self, conversation_text: str, user_id: str, conversation_id: str
+    ) -> List[Dict[str, Any]]:
         """使用LLM分析对话，提取记忆"""
         prompt = f"""请分析以下对话，提取有价值的记忆信息。
 
-对话内容：
+对话内容（标注了用户和AI的发言）：
 {conversation_text}
 
 请从对话中提取以下类型的记忆（如果没有则不需要提取）：
 
+**用户相关信息：**
 1. **事件记忆 (episodic)** - 用户提到的具体事情、经历
    - 例：用户今天去了医院看病
    - 例：用户周末参加了朋友的婚礼
@@ -116,20 +124,36 @@ class ConversationMemoryExtractor:
    - 例：用户有个男朋友叫小明
    - 例：用户和同事关系很好
 
+**AI相关信息（重要）：**
+7. **AI承诺 (ai_promise)** - AI对用户做出的承诺、约定
+   - 例：AI承诺下次提醒用户开会
+   - 例：AI答应帮用户查资料
+
+8. **AI建议 (ai_suggestion)** - AI给用户的建议、推荐
+   - 例：AI推荐用户试试冥想
+   - 例：AI建议用户早点休息
+
+9. **共同话题 (shared_topic)** - 双方共同讨论的话题、约定
+   - 例：AI和用户约定周末一起打游戏
+   - 例：AI和用户都喜欢某部电影
+
 请以JSON格式返回提取的记忆列表：
 [
   {{
-    "type": "记忆类型(episodic/semantic/emotional/preference/habit/relationship)",
-    "content": "记忆内容，简洁明了",
+    "type": "记忆类型(episodic/semantic/emotional/preference/habit/relationship/ai_promise/ai_suggestion/shared_topic)",
+    "content": "记忆内容，简洁明了，如果是AI相关信息请明确标注'AI承诺'、'AI建议'等",
     "summary": "一句话摘要",
     "importance": 重要性评分(1-10),
-    "keywords": ["关键词1", "关键词2"]
+    "keywords": ["关键词1", "关键词2"],
+    "source": "user或ai，表示信息来源"
   }}
 ]
 
 注意：
+- 区分用户和AI的发言，分别提取有价值的信息
+- AI的承诺和建议很重要，需要记录以便后续兑现
 - 只提取有价值的新信息，不要重复提取已知信息
-- 重要性根据信息对了解用户的价值判断
+- 重要性根据信息对了解用户/维护关系的价值判断
 - 如果没有新信息，返回空数组 []
 """
 
@@ -143,6 +167,10 @@ class ConversationMemoryExtractor:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,
+                db=self.session,
+                user_id=user_id,
+                conversation_id=conversation_id,
+                operation="extract_conversation_memory",
             )
 
             # 解析JSON响应
@@ -169,11 +197,27 @@ class ConversationMemoryExtractor:
         if await self._is_duplicate_memory(user_id, memory_data["content"]):
             return None
 
+        # 确定信息来源（用户或AI）
+        info_source = memory_data.get("source", "user")
+        memory_type = memory_data["type"]
+
+        # 根据记忆类型和来源构建更清晰的描述
+        content = memory_data["content"]
+        if memory_type in ["ai_promise", "ai_suggestion"] and info_source == "ai":
+            # 确保AI相关信息有明确标识
+            if not content.startswith("AI"):
+                content = f"[AI] {content}"
+        elif info_source == "ai" and not content.startswith("AI"):
+            content = f"[AI] {content}"
+        elif info_source == "user" and not content.startswith("用户"):
+            # 用户内容可以加上标识以便区分
+            pass  # 保持原样，因为用户是默认视角
+
         # 创建记忆
         memory = Memory(
             user_id=user_id,
-            memory_type=memory_data["type"],
-            content=memory_data["content"],
+            memory_type=memory_type,
+            content=content,
             summary=memory_data.get("summary", ""),
             importance=min(max(memory_data.get("importance", 5), 1), 10),
             occurred_at=datetime.utcnow(),
@@ -183,6 +227,8 @@ class ConversationMemoryExtractor:
                     "conversation_id": source_conversation_id,
                     "keywords": memory_data.get("keywords", []),
                     "extracted_at": datetime.utcnow().isoformat(),
+                    "info_source": info_source,  # 记录信息来源：user 或 ai
+                    "is_ai_generated": info_source == "ai",  # 标记是否为AI生成的内容
                 }
             ),
         )
@@ -191,7 +237,10 @@ class ConversationMemoryExtractor:
         await self.session.commit()
         await self.session.refresh(memory)
 
-        print(f"[MemoryExtractor] 保存记忆: {memory.memory_type} - {memory.content[:50]}...")
+        source_label = "AI" if info_source == "ai" else "用户"
+        print(
+            f"[MemoryExtractor] 保存记忆 [{source_label}]: {memory.memory_type} - {memory.content[:50]}..."
+        )
         return memory
 
     async def _is_duplicate_memory(self, user_id: str, content: str) -> bool:

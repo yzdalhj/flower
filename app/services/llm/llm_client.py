@@ -1,5 +1,6 @@
 """LLM客户端 - 支持多模型"""
 
+import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import AsyncGenerator, Dict, List, Optional
@@ -10,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.session import AsyncSessionLocal
 from app.models.settings import LLMProvider
+from app.services.llm.llm_usage_service import record_llm_usage
 
 
 class ModelType(str, Enum):
@@ -38,17 +40,22 @@ class LLMResponse:
     content: str
     model: str
     tokens_used: int = 0
+    prompt_tokens: int = 0  # 输入token数
+    completion_tokens: int = 0  # 输出token数
     finish_reason: str = "stop"
 
 
 class BaseLLMClient:
     """基础LLM客户端"""
 
-    def __init__(self, api_key: str, base_url: str, model: str, timeout: int = 30):
+    def __init__(
+        self, api_key: str, base_url: str, model: str, timeout: int = 30, provider: str = "unknown"
+    ):
         self.api_key = api_key
         self.base_url = base_url
         self.model = model
         self.timeout = timeout
+        self.provider = provider  # 厂商名称
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
@@ -95,10 +102,18 @@ class BaseLLMClient:
                 model=self.model,
             )
         else:
+            # 获取详细的token使用情况
+            usage = response.usage
+            prompt_tokens = usage.prompt_tokens if usage else 0
+            completion_tokens = usage.completion_tokens if usage else 0
+            total_tokens = usage.total_tokens if usage else 0
+
             return LLMResponse(
                 content=response.choices[0].message.content,
                 model=self.model,
-                tokens_used=response.usage.total_tokens if response.usage else 0,
+                tokens_used=total_tokens,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
                 finish_reason=response.choices[0].finish_reason,
             )
 
@@ -170,6 +185,7 @@ class LLMRouter:
                         base_url=provider.base_url,
                         model=provider.default_model,
                         timeout=provider.timeout,
+                        provider=provider.name,
                     )
         finally:
             if should_close:
@@ -242,6 +258,9 @@ class LLMRouter:
         fallback: bool = True,
         deep_thinking: bool = False,
         db: Optional[AsyncSession] = None,
+        user_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        operation: Optional[str] = None,
     ) -> LLMResponse:
         """
         发送对话请求（带故障切换）
@@ -254,6 +273,9 @@ class LLMRouter:
             fallback: 是否启用故障切换
             deep_thinking: 是否启用深度思考模式
             db: 数据库会话
+            user_id: 用户ID（用于记录使用）
+            conversation_id: 对话ID（用于记录使用）
+            operation: 操作描述（用于记录使用）
 
         Returns:
             LLM响应
@@ -275,15 +297,64 @@ class LLMRouter:
             raise ValueError(f"厂商 {provider} 不可用")
 
         client = self.clients[provider]
+        start_time = time.time()
 
         try:
-            return await client.chat(
+            response = await client.chat(
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 deep_thinking=deep_thinking,
             )
+
+            # 记录使用情况
+            latency_ms = int((time.time() - start_time) * 1000)
+            prompt_summary = messages[-1]["content"][:100] if messages else None
+            response_summary = response.content[:100] if response.content else None
+
+            if db:
+                try:
+                    await record_llm_usage(
+                        session=db,
+                        provider=provider,
+                        model=response.model or client.model,
+                        prompt_tokens=response.prompt_tokens,
+                        completion_tokens=response.completion_tokens,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        request_type="chat",
+                        operation=operation or "chat",
+                        status="success",
+                        latency_ms=latency_ms,
+                        prompt_summary=prompt_summary,
+                        response_summary=response_summary,
+                    )
+                except Exception as e:
+                    print(f"[LLMUsage] 记录使用情况失败: {e}")
+
+            return response
+
         except Exception as e:
+            # 记录错误
+            if db:
+                try:
+                    await record_llm_usage(
+                        session=db,
+                        provider=provider,
+                        model=client.model,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        request_type="chat",
+                        operation=operation or "chat",
+                        status="error",
+                        error_message=str(e)[:500],
+                        latency_ms=int((time.time() - start_time) * 1000),
+                    )
+                except Exception as record_error:
+                    print(f"[LLMUsage] 记录错误失败: {record_error}")
+
             if fallback:
                 # 故障切换
                 print(f"厂商 {provider} 失败，尝试切换: {e}")
@@ -291,12 +362,34 @@ class LLMRouter:
                     if fallback_provider != provider:
                         try:
                             fallback_client = self.clients[fallback_provider]
-                            return await fallback_client.chat(
+                            fb_start_time = time.time()
+                            response = await fallback_client.chat(
                                 messages=messages,
                                 temperature=temperature,
                                 max_tokens=max_tokens,
                                 deep_thinking=deep_thinking,
                             )
+
+                            # 记录故障切换后的使用情况
+                            if db:
+                                try:
+                                    await record_llm_usage(
+                                        session=db,
+                                        provider=fallback_provider,
+                                        model=response.model or fallback_client.model,
+                                        prompt_tokens=response.prompt_tokens,
+                                        completion_tokens=response.completion_tokens,
+                                        user_id=user_id,
+                                        conversation_id=conversation_id,
+                                        request_type="chat",
+                                        operation=f"{operation or 'chat'} (fallback)",
+                                        status="success",
+                                        latency_ms=int((time.time() - fb_start_time) * 1000),
+                                    )
+                                except Exception as record_error:
+                                    print(f"[LLMUsage] 记录fallback使用情况失败: {record_error}")
+
+                            return response
                         except Exception:
                             continue
             raise

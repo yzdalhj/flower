@@ -94,8 +94,8 @@ class BuildPromptRequest(BaseModel):
 
 @router.get("/templates", response_model=List[Dict[str, Any]])
 async def list_templates(
-    personality_id: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    personality_id: Optional[str] = Query(None),
+    is_active: Optional[bool] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),

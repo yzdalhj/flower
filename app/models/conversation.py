@@ -67,6 +67,9 @@ class Message(BaseModel):
     # 元数据
     meta_data: Mapped[str | None] = Column(Text, nullable=True)  # JSON格式
 
+    # 表情包（如果有）
+    sticker_id: Mapped[int | None] = Column(Integer, ForeignKey("stickers.id"), nullable=True)
+
     # 使用的模型
     model_used: Mapped[str | None] = Column(String(100), nullable=True)
     tokens_used: Mapped[int | None] = Column(Integer, nullable=True)

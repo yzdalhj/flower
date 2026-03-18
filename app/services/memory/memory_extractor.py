@@ -289,6 +289,88 @@ class MemoryExtractor:
         events.extend(self.detect_job_changes(text))
         return events
 
+    def _extract_ai_info(self, ai_messages: List[str]) -> List[ExtractedInfo]:
+        """
+        从AI回复中提取重要信息
+        包括AI的承诺、约定、建议等
+        """
+        info = []
+
+        # AI承诺/约定的模式
+        promise_patterns = [
+            r"我会([一-龥\w\s]{1,30})",
+            r"我([一-龥\w\s]{1,20})帮你",
+            r"下次([一-龥\w\s]{1,20})",
+            r"以后([一-龥\w\s]{1,20})",
+            r"记得([一-龥\w\s]{1,20})",
+            r"([一-龥\w\s]{1,20})提醒你",
+        ]
+
+        # AI的建议/推荐
+        suggestion_patterns = [
+            r"推荐([一-龥\w\s]{1,30})",
+            r"建议([一-龥\w\s]{1,30})",
+            r"可以试试([一-龥\w\s]{1,30})",
+            r"([一-龥\w\s]{1,20})不错",
+        ]
+
+        # 共同经历/话题
+        shared_patterns = [
+            r"我们一起([一-龥\w\s]{1,30})",
+            r"咱们([一-龥\w\s]{1,20})",
+        ]
+
+        for msg in ai_messages:
+            # 提取承诺
+            for pattern in promise_patterns:
+                matches = re.findall(pattern, msg)
+                for match in matches:
+                    content = match.strip() if isinstance(match, str) else "".join(match).strip()
+                    if content and len(content) <= 30:
+                        info.append(
+                            ExtractedInfo(
+                                info_type="ai_promise",
+                                key="ai_commitment",
+                                value=f"AI承诺: {content}",
+                                source=msg[:50],
+                                confidence=0.8,
+                            )
+                        )
+
+            # 提取建议
+            for pattern in suggestion_patterns:
+                matches = re.findall(pattern, msg)
+                for match in matches:
+                    content = match.strip() if isinstance(match, str) else "".join(match).strip()
+                    if content and len(content) <= 30:
+                        info.append(
+                            ExtractedInfo(
+                                info_type="ai_suggestion",
+                                key="ai_recommendation",
+                                value=f"AI建议: {content}",
+                                source=msg[:50],
+                                confidence=0.75,
+                            )
+                        )
+
+            # 提取共同话题
+            for pattern in shared_patterns:
+                matches = re.findall(pattern, msg)
+                for match in matches:
+                    content = match.strip() if isinstance(match, str) else "".join(match).strip()
+                    if content and len(content) <= 30:
+                        info.append(
+                            ExtractedInfo(
+                                info_type="shared_experience",
+                                key="shared_topic",
+                                value=f"共同话题: {content}",
+                                source=msg[:50],
+                                confidence=0.7,
+                            )
+                        )
+
+        return info
+
     def generate_summary(self, messages: List[Dict[str, str]]) -> ConversationSummary:
         """
         生成对话摘要
@@ -299,17 +381,25 @@ class MemoryExtractor:
         Returns:
             对话摘要
         """
+        # 分别获取用户和AI的消息
         user_messages = [m["content"] for m in messages if m["role"] == "user"]
+        ai_messages = [m["content"] for m in messages if m["role"] == "assistant"]
+        all_messages = [m["content"] for m in messages]
 
+        # 从用户消息中提取信息（用户的事实、偏好等）
         extracted_info = []
         for msg in user_messages:
             extracted_info.extend(self.extract_all_info(msg))
+
+        # 从AI消息中提取信息（AI的承诺、约定等）
+        ai_info = self._extract_ai_info(ai_messages)
+        extracted_info.extend(ai_info)
 
         detected_events = []
         for msg in user_messages:
             detected_events.extend(self.detect_events(msg))
 
-        key_topics = self._extract_topics(user_messages)
+        key_topics = self._extract_topics(all_messages)
 
         summary = self._generate_summary_text(messages, extracted_info, detected_events)
 

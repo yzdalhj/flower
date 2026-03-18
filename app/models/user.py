@@ -11,6 +11,7 @@ from app.models.base import BaseModel
 if TYPE_CHECKING:
     from app.models.account import Account
     from app.models.conversation import Conversation
+    from app.models.llm_usage import LLMUsageRecord
     from app.models.memory import Memory
 
 
@@ -46,6 +47,9 @@ class User(BaseModel):
     )
     memories: Mapped[List["Memory"]] = relationship(
         "Memory", back_populates="user", cascade="all, delete-orphan"
+    )
+    llm_usage_records: Mapped[List["LLMUsageRecord"]] = relationship(
+        "LLMUsageRecord", back_populates="user"
     )
 
     def __repr__(self) -> str:

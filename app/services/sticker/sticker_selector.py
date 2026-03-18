@@ -30,6 +30,7 @@ class StickerSelector:
         context_keywords: Optional[List[str]] = None,
         conversation_context: Optional[str] = None,
         is_serious_context: bool = False,
+        sticker_type_filter: Optional[str] = None,
     ) -> Optional[StickerSelection]:
         """
         选择最适合当前场景的表情包
@@ -40,6 +41,7 @@ class StickerSelector:
             context_keywords: 上下文关键词
             conversation_context: 对话上下文
             is_serious_context: 是否为严肃场景
+            sticker_type_filter: 表情包类型过滤，只返回指定类型（"emotion", "reaction", "meme", "custom"）
 
         Returns:
             选中的表情包，如果不需要发表情包则返回None
@@ -52,18 +54,24 @@ class StickerSelector:
         if not should_send:
             return None
 
-        # 2. 获取主导情绪
+        # 2. 获取主导情绪（允许为None）
         dominant_emotion, emotion_intensity = self._get_dominant_emotion(current_emotion)
-        if not dominant_emotion or emotion_intensity < self.strategy.min_emotion_intensity:
+
+        # 如果没有主导情绪但情绪强度足够，也可以继续
+        if not dominant_emotion and emotion_intensity < self.strategy.min_emotion_intensity:
+            print(f"[StickerSelector] 情绪强度不足: {emotion_intensity}")
             return None
 
         # 3. 获取候选表情包
         candidates = await self._get_candidate_stickers(
-            dominant_emotion, personality_type, context_keywords
+            dominant_emotion, personality_type, context_keywords, sticker_type_filter
         )
 
         if not candidates:
+            print("[StickerSelector] 没有找到候选表情包")
             return None
+
+        print(f"[StickerSelector] 找到 {len(candidates)} 个候选表情包")
 
         # 4. 计算每个候选的匹配分数
         scored_candidates = []
@@ -87,13 +95,14 @@ class StickerSelector:
         sticker, total_score, emotion_match, personality_match, context_match = selected
 
         # 7. 构造选择结果
+        emotion_str = dominant_emotion.value if dominant_emotion else "无"
         return StickerSelection(
             sticker=sticker,
             match_score=total_score,
             emotion_match=emotion_match,
             personality_match=personality_match,
             context_match=context_match,
-            reason=f"匹配情绪：{dominant_emotion.value}，强度：{emotion_intensity:.2f}，人格适配：{personality_type}",
+            reason=f"匹配情绪：{emotion_str}，强度：{emotion_intensity:.2f}，人格适配：{personality_type}",
         )
 
     def _should_send_sticker(
@@ -191,22 +200,39 @@ class StickerSelector:
 
     async def _get_candidate_stickers(
         self,
-        emotion: StickerEmotion,
+        emotion: Optional[StickerEmotion],
         personality_type: str,
         context_keywords: Optional[List[str]] = None,
+        sticker_type_filter: Optional[str] = None,
         limit: int = 50,
     ) -> List[Sticker]:
         """获取候选表情包"""
-        # 优先根据情绪和人格获取
-        stickers = await self.sticker_service.get_stickers_by_emotion(
-            emotion=emotion, personality=personality_type, limit=limit
-        )
+        from app.models.sticker import StickerType
 
-        # 如果数量不足，尝试搜索关键词
+        # 转换类型
+        sticker_type = None
+        if sticker_type_filter:
+            try:
+                sticker_type = StickerType(sticker_type_filter)
+            except ValueError:
+                pass
+
+        stickers = []
+
+        # 如果有情绪，优先根据情绪获取
+        if emotion:
+            stickers = await self.sticker_service.get_stickers_by_emotion(
+                emotion=emotion,
+                personality=personality_type,
+                sticker_type=sticker_type,
+                limit=limit,
+            )
+
+        # 如果数量不足或没有情绪，尝试搜索关键词（不限制情绪）
         if len(stickers) < 10 and context_keywords:
             for keyword in context_keywords[:3]:  # 只搜索前3个关键词
                 keyword_stickers = await self.sticker_service.search_stickers(
-                    keyword=keyword, emotion=emotion, limit=20
+                    keyword=keyword, type=sticker_type, emotion=None, limit=20
                 )
                 # 去重
                 existing_ids = {s.id for s in stickers}
@@ -215,12 +241,23 @@ class StickerSelector:
                         stickers.append(s)
                         existing_ids.add(s.id)
 
+        # 如果还是不够，随机获取一些梗图
+        if sticker_type_filter == "meme" and len(stickers) < 5:
+            random_stickers = await self.sticker_service.get_random_stickers(
+                type=sticker_type, limit=10
+            )
+            existing_ids = {s.id for s in stickers}
+            for s in random_stickers:
+                if s.id not in existing_ids:
+                    stickers.append(s)
+                    existing_ids.add(s.id)
+
         return stickers
 
     def _calculate_match_score(
         self,
         sticker: Sticker,
-        dominant_emotion: StickerEmotion,
+        dominant_emotion: Optional[StickerEmotion],
         emotion_intensity: float,
         personality_type: str,
         context_keywords: Optional[List[str]] = None,
@@ -228,8 +265,11 @@ class StickerSelector:
         """计算表情包的匹配分数"""
         # 1. 情绪匹配分 (0-1)
         emotion_match = 0.0
-        if sticker.emotion == dominant_emotion:
+        if dominant_emotion and sticker.emotion == dominant_emotion:
             emotion_match = 1.0 * emotion_intensity
+        # 如果表情包没有情绪标签，给一个基础分
+        elif not sticker.emotion:
+            emotion_match = 0.5
         emotion_match *= sticker.emotion_weight
 
         # 2. 人格匹配分 (0-1)
@@ -293,6 +333,7 @@ class StickerSelector:
         personality_type: str = "default",
         context_keywords: Optional[List[str]] = None,
         is_serious_context: bool = False,
+        sticker_type_filter: Optional[str] = None,
     ) -> Tuple[Optional[Sticker], str]:
         """
         为回复选择合适的表情包
@@ -305,6 +346,7 @@ class StickerSelector:
             personality_type=personality_type,
             context_keywords=context_keywords,
             is_serious_context=is_serious_context,
+            sticker_type_filter=sticker_type_filter,
         )
 
         if not selection:

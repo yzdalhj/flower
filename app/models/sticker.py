@@ -119,24 +119,28 @@ class StickerSelection:
 
 @dataclass
 class StickerSendStrategy:
-    """表情包发送策略"""
+    """表情包发送策略
 
-    # 发送概率配置
-    only_sticker_probability: float = 0.3  # 30%概率只发表情包
-    text_with_sticker_probability: float = 0.5  # 50%概率图文搭配
-    no_sticker_probability: float = 0.2  # 20%概率不发表情包
+    注意：发送前的语境过滤已在 dialogue.py 的 _should_send_meme() 中完成，
+    这里配置的是通过过滤后的发送概率
+    """
+
+    # 发送概率配置（通过 _should_send_meme 过滤后）
+    only_sticker_probability: float = 0.2  # 20%概率只发梗图
+    text_with_sticker_probability: float = 0.6  # 60%概率图文搭配
+    no_sticker_probability: float = 0.2  # 20%概率不发
 
     # 触发条件
-    min_emotion_intensity: float = 0.4  # 最低情绪强度阈值
+    min_emotion_intensity: float = 0.3  # 最低情绪强度阈值（已在前面过滤，这里放宽）
     max_stickers_per_message: int = 1  # 单条消息最多表情包数量
     use_sticker_in_serious_context: bool = False  # 严肃场景是否使用表情包
 
     # 人格适配
     personality_adjustment: Dict[str, float] = field(
         default_factory=lambda: {
-            "cheerful": 1.5,  # 活泼型人格增加表情包使用概率
-            "calm": 0.7,  # 沉稳型人格减少表情包使用概率
-            "sarcastic": 1.2,  # 吐槽型人格适中
+            "cheerful": 1.3,  # 活泼型人格增加梗图使用概率
+            "calm": 0.6,  # 沉稳型人格减少梗图使用概率
+            "sarcastic": 1.4,  # 吐槽型人格更适合用梗图
             "default": 1.0,  # 默认
         }
     )

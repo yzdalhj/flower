@@ -36,7 +36,7 @@ class DialogueResponse:
     emotion: Optional[Dict[str, float]] = None
     model_used: str = ""
     tokens_used: int = 0
-    sticker: Optional[Dict] = None  # 表情包信息
+    sticker: Optional[Dict[str, Any]] = None  # 表情包信息
     sticker_send_mode: str = "no_sticker"  # "only_sticker", "text_with_sticker", "no_sticker"
     conversation_id: Optional[str] = None  # 对话ID
 
@@ -83,11 +83,14 @@ class DialogueProcessor:
         cost_optimizer = get_cost_optimizer()
 
         async def llm_callback():
-            messages = self._build_prompt(context)
+            messages = await self._build_prompt(context)
             return await llm_router.chat(
                 messages=messages,
                 temperature=0.7,
                 db=self.session,
+                user_id=user_id,
+                conversation_id=conversation.id,
+                operation="dialogue_chat",
             )
 
         response_content, source = await cost_optimizer.process(
@@ -96,7 +99,7 @@ class DialogueProcessor:
             llm_callback=llm_callback,
         )
 
-        if source in ["cache", "rule"]:
+        if source == "cache":
             from app.services.llm.llm_client import LLMResponse
 
             llm_response = LLMResponse(
@@ -108,8 +111,7 @@ class DialogueProcessor:
 
             llm_response = LLMResponse(content=response_content, model="llm", tokens_used=0)
 
-        # 5. 人格一致性检测（仅对LLM生成的回复进行）
-        if source == "llm":
+            # 5. 人格一致性检测（对所有回复进行）
             consistency_checker = get_personality_consistency_checker()
             consistency_result = consistency_checker.check_consistency(
                 llm_response.content, conversation.personality_id
@@ -117,7 +119,7 @@ class DialogueProcessor:
 
             # 如果一致性低于阈值，重新生成回复
             if not consistency_result.get("consistent"):
-                messages = self._build_prompt(context)
+                messages = await self._build_prompt(context)
                 correction_prompt = consistency_checker.generate_correction_prompt(
                     llm_response.content, conversation.personality_id, consistency_result
                 )
@@ -128,33 +130,60 @@ class DialogueProcessor:
                     messages=correction_messages,
                     temperature=0.7,
                     db=self.session,
+                    user_id=user_id,
+                    conversation_id=conversation.id,
+                    operation="personality_correction",
                 )
 
-        # 6. 智能选择表情包
+        # 6. 智能选择网络梗图表情包
         sticker_info = None
         sticker_send_mode = "no_sticker"
         try:
             # 分析回复的情绪
             response_emotion = self._analyze_emotion(llm_response.content)
+            print(f"[StickerDebug] 情绪分析结果: {response_emotion}")
 
-            # 创建表情包选择器
-            sticker_selector = StickerSelector(self.session)
+            # 智能判断是否需要发送梗图
+            should_send = self._should_send_meme(llm_response.content, response_emotion)
+            print(f"[StickerDebug] 是否应该发送梗图: {should_send}")
 
-            # 提取上下文关键词
-            context_keywords = self._extract_keywords(message + " " + llm_response.content)
+            if not should_send:
+                print("[StickerDebug] 根据语境判断不需要发送梗图")
+            else:
+                print("[StickerDebug] 开始选择梗图...")
+                # 创建表情包选择器，强制只选择网络梗图
+                sticker_selector = StickerSelector(self.session)
 
-            # 选择表情包
-            sticker, sticker_send_mode = await sticker_selector.select_stickers_for_reply(
-                current_emotion=response_emotion,
-                personality_type=conversation.personality_id,
-                context_keywords=context_keywords,
-                is_serious_context=False,  # 可以根据内容判断
-            )
+                # 提取上下文关键词
+                context_keywords = self._extract_keywords(message + " " + llm_response.content)
+                print(f"[StickerDebug] 上下文关键词: {context_keywords}")
 
-            if sticker:
-                sticker_info = sticker.to_dict()
-        except Exception:
-            # 表情包选择失败不影响主流程
+                # 选择梗图，强制只选择网络梗图类型
+                sticker, sticker_send_mode = await sticker_selector.select_stickers_for_reply(
+                    current_emotion=response_emotion,
+                    personality_type=conversation.personality_id,
+                    context_keywords=context_keywords,
+                    is_serious_context=False,
+                    sticker_type_filter="meme",
+                )
+
+                print(
+                    f"[StickerDebug] 选择结果 - sticker: {sticker}, send_mode: {sticker_send_mode}"
+                )
+
+                if sticker:
+                    sticker_info = sticker.to_dict()
+                    print(
+                        f"[StickerDebug] 成功获取梗图: {sticker_info.get('name')} - URL: {sticker_info.get('url')}"
+                    )
+                else:
+                    print("[StickerDebug] 未找到合适的梗图")
+        except Exception as e:
+            # 梗图选择失败不影响主流程
+            print(f"[StickerDebug] 梗图选择异常: {e}")
+            import traceback
+
+            traceback.print_exc()
             pass
 
         # 7. 拆分长句并保存AI回复
@@ -169,6 +198,8 @@ class DialogueProcessor:
                 model_used=llm_response.model if i == 0 else f"{llm_response.model}-part{i+1}",
                 tokens_used=llm_response.tokens_used // len(message_parts) if i == 0 else 0,
             )
+            # 每个消息保存后立即提交，让前端能读到最新数据
+            await self.session.commit()
             # 添加短暂延迟，模拟真实打字节奏
             if i < len(message_parts) - 1:
                 import asyncio
@@ -200,36 +231,8 @@ class DialogueProcessor:
             print(f"[DialogueProcessor] 更新会话标题失败: {e}")
 
         # 11. 异步提取对话记忆（不阻塞回复）
-        try:
-            from app.services.memory.conversation_memory_extractor import (
-                ConversationMemoryExtractor,
-            )
-
-            extractor = ConversationMemoryExtractor(self.session)
-
-            # 获取本次对话的所有消息
-            from sqlalchemy import select
-
-            result = await self.session.execute(
-                select(Message)
-                .where(Message.conversation_id == conversation.id)
-                .order_by(Message.created_at.asc())
-            )
-            conversation_messages = result.scalars().all()
-
-            # 提取记忆（异步执行，不等待结果）
-            import asyncio
-
-            asyncio.create_task(
-                extractor.extract_from_conversation(
-                    user_id=user_id,
-                    conversation_id=conversation.id,
-                    messages=conversation_messages,
-                )
-            )
-        except Exception as e:
-            # 记忆提取失败不影响主流程
-            print(f"[DialogueProcessor] 记忆提取失败: {e}")
+        # 注意：不在此处执行，避免会话关闭后使用问题
+        # 记忆提取由独立调度器处理
 
         return DialogueResponse(
             content=llm_response.content,
@@ -322,6 +325,7 @@ class DialogueProcessor:
         content: str,
         model_used: Optional[str] = None,
         tokens_used: Optional[int] = None,
+        sticker_id: Optional[int] = None,
     ) -> Message:
         """保存消息"""
         from sqlalchemy import select
@@ -335,6 +339,7 @@ class DialogueProcessor:
             content=content,
             model_used=model_used,
             tokens_used=tokens_used,
+            sticker_id=sticker_id,
         )
         self.session.add(message)
         await self.session.commit()
@@ -412,16 +417,18 @@ class DialogueProcessor:
         # 转换为OpenAI格式（反转回正序：从早到晚）
         history = []
         for msg in reversed(list(messages)):
-            history.append({"role": msg.role, "content": msg.content})
+            # 过滤掉内容中的表情包标记，避免AI学习这个模式
+            content = self._clean_message_content(msg.content)
+            history.append({"role": msg.role, "content": content})
 
         return history
 
-    def _build_prompt(self, context: DialogueContext) -> List[Dict[str, str]]:
+    async def _build_prompt(self, context: DialogueContext) -> List[Dict[str, str]]:
         """构建Prompt"""
         messages = []
 
         # 系统提示
-        system_prompt = self._build_system_prompt(context)
+        system_prompt = await self._build_system_prompt(context)
         messages.append({"role": "system", "content": system_prompt})
 
         # 历史消息
@@ -432,7 +439,7 @@ class DialogueProcessor:
 
         return messages
 
-    def _build_system_prompt(self, context: DialogueContext) -> str:
+    async def _build_system_prompt(self, context: DialogueContext) -> str:
         """构建系统提示"""
         # 获取人格服务
         personality_service = get_personality_service()
@@ -449,61 +456,24 @@ class DialogueProcessor:
         )
         forbidden_phrases = personality_service.generate_forbidden_phrases(personality)
 
-        # 构建系统提示
-        prompt = f"""你是{personality.name}，一个真实的人类女孩，是用户的好朋友。你不是AI，不是助手，就是一个普通女生。
+        # 准备模板变量
+        variables = {
+            "personality_name": personality.name,
+            "speaking_style": speaking_style,
+            "communication_guidelines": communication_guidelines,
+            "forbidden_phrases": forbidden_phrases,
+        }
 
-【你的性格】
-{speaking_style}
+        # 从Prompt模板服务构建Prompt
+        from app.services.prompt_template_service import get_prompt_template_service
 
-【沟通指南】
-{communication_guidelines}
+        prompt_service = await get_prompt_template_service(self.session)
+        template_prompt = await prompt_service.build_prompt_for_personality(
+            context.personality_id, variables
+        )
 
-【禁止行为】
-{forbidden_phrases}
-
-【说话风格 - 必须严格遵守】
-1. 简短直接：2-3句话就够了，不要长篇大论
-2. 真实情绪：先吐槽再安慰，有真实情绪反应
-3. 思维跳跃：不要逻辑太清晰，像真人一样想到哪说到哪
-4. 不完美：有错别字也没关系，不要太工整
-5. 长句拆分：如果内容多，分成多条短消息发送，每条只表达一个意思
-   - 每条消息控制在15-25字以内
-   - 像真人打字一样，想到哪说到哪，不要一次性说完
-   - 可以分成2-3条消息连续发送，模拟真实聊天节奏
-
-【网络梗使用】
-可以适量使用网络流行语和梗，让对话更自然有趣：
-- 根据语境自然融入，不要生硬堆砌
-- 适度使用，不要每句话都带梗
-- 选择符合当下年轻人交流习惯的表达
-
-【表情使用】
-用真实表情，不要用官方表情：
-- 开心/搞笑：�、🤣、😆、��
-- 无奈/无语：�、�、🤦
-- 生气：💢、�
-- 其他：😏、🤪、👌
-
-【绝对禁止的AI用语】
-❌ "我理解你的感受"
-❌ "有什么可以帮助您的"
-❌ "作为AI"
-❌ "很高兴为您服务"
-❌ "感谢您的理解"
-❌ "我建议"
-❌ "让我想想"
-❌ "请问"
-❌ "您"（用"你"）
-
-【回复示例】
-用户：今天工作好累啊
-好的回复："卧槽，这么惨😂 我也是，今天差点原地去世"
-差的回复："我理解你的感受，工作确实很辛苦。建议您适当休息一下。"
-
-用户：我分手了
-好的回复："害，别难过，下一个更乖😏 走，晚上请你喝奶茶"
-差的回复："我很抱歉听到这个消息。分手确实是一件令人难过的事情。"
-"""
+        # 使用从数据库加载的模板
+        prompt = template_prompt
 
         # 添加用户画像
         if context.user_profile:
@@ -520,7 +490,16 @@ class DialogueProcessor:
         if context.memories:
             prompt += "\n【你记得关于用户的事】\n"
             for memory in context.memories[:3]:  # 最多3条
-                prompt += f"- {memory.get('content', '')}\n"
+                content = memory.get("content", "")
+                memory_type = memory.get("memory_type", "")
+                # 根据记忆类型添加前缀，帮助AI理解信息来源
+                if memory_type in ["ai_promise", "ai_suggestion"]:
+                    prefix = "[你之前说过] "
+                elif content.startswith("[AI]"):
+                    prefix = "[你之前说过] "
+                else:
+                    prefix = ""
+                prompt += f"- {prefix}{content}\n"
 
         return prompt
 
@@ -588,6 +567,8 @@ AI: {ai_response[:100]}
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.5,
+                db=self.session,
+                operation="generate_conversation_title",
             )
 
             title = response.content.strip().replace('"', "").replace('"', "")
@@ -686,6 +667,90 @@ AI: {ai_response[:100]}
 
         # 返回前5个关键词
         return keywords[:5]
+
+    def _clean_message_content(self, content: str) -> str:
+        """清理消息内容，移除表情包标记等内部标记
+
+        避免AI从历史消息中学习到 '[表情包：xxx]' 这种标记格式
+        """
+        import re
+
+        # 移除表情包标记，如：[表情包：xxx.gif] 或 [表情包：xxx.jpg]
+        cleaned = re.sub(r"\[表情包：[^\]]+\]\s*", "", content)
+        return cleaned.strip()
+
+    def _should_send_meme(self, text: str, emotion: Dict[str, float]) -> bool:
+        """智能判断是否应该发送梗图表情包
+
+        只在以下情况发送梗图:
+        1. 文本较短（短句适合搭配梗图）
+        2. 情绪强度足够高（有明显情绪才需要梗图表达）
+        3. 不包含严肃关键词（严肃话题不适合发梗图）
+        4. 不是问答/教程类内容
+        """
+        # 规则1：文本太长 -> 不发（长文通常是正经回答）
+        if len(text) > 150:
+            return False
+
+        # 规则2：检测严肃关键词 -> 不发
+        serious_keywords = [
+            "严重",
+            "重要",
+            "紧急",
+            "必须",
+            "应该",
+            "需要",
+            "严肃",
+            "认真",
+            "正式",
+            "官方",
+            "法律",
+            "规定",
+            "通知",
+            "公告",
+            "警告",
+            "提醒",
+            "建议",
+            "指导",
+            "帮助",
+            "解决",
+            "问题",
+            "错误",
+            "修复",
+            "bug",
+            "教程",
+            "步骤",
+            "方法",
+            "如何",
+            "怎么",
+            "请告诉我",
+            "解释",
+            "说明",
+            "介绍",
+            "教学",
+            "课程",
+        ]
+        text_lower = text.lower()
+        for keyword in serious_keywords:
+            if keyword in text_lower:
+                return False
+
+        # 规则3：问答内容 -> 不发
+        question_marks = text.count("？") + text.count("?")
+        if question_marks >= 2:
+            return False
+
+        # 规则4：情绪强度太低 -> 不发
+        max_emotion = max(emotion.values()) if emotion else 0
+        if max_emotion < 0.3:
+            return False
+
+        # 规则5：列表/代码块 -> 不发
+        if "\n-" in text or "\n1." in text or "```" in text:
+            return False
+
+        # 通过所有规则 -> 可以发送梗图
+        return True
 
     def _split_long_message(self, text: str) -> List[str]:
         """拆分长消息为多条短消息"""

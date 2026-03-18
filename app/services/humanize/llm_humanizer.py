@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """LLM真人化处理器"""
 
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.llm.llm_client import llm_router
 
@@ -20,6 +22,9 @@ class LLMHumanizer:
         conversation_history: List[Dict] = None,
         emotion: Dict[str, float] = None,
         personality_id: str = None,
+        db: Optional[AsyncSession] = None,
+        user_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
     ) -> str:
         """
         使用LLM真人化回复
@@ -29,6 +34,9 @@ class LLMHumanizer:
             conversation_history: 对话历史
             emotion: 当前情感状态
             personality_id: 人格ID
+            db: 数据库会话
+            user_id: 用户ID
+            conversation_id: 对话ID
 
         Returns:
             真人化后的回复
@@ -46,6 +54,10 @@ class LLMHumanizer:
             messages=[{"role": "user", "content": prompt}],
             temperature=0.8,
             max_tokens=200,
+            db=db,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            operation="llm_humanize",
         )
 
         return response.content

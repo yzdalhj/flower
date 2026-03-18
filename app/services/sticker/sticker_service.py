@@ -51,6 +51,25 @@ class StickerService:
 
         return sticker
 
+    async def get_random_stickers(
+        self,
+        type: Optional[StickerType] = None,
+        limit: int = 10,
+    ) -> List[Sticker]:
+        """随机获取表情包"""
+        from sqlalchemy import func
+
+        query = select(Sticker).where(Sticker.is_active is True)
+
+        if type:
+            query = query.where(Sticker.type == type)
+
+        # SQLite 使用 RANDOM() 函数
+        query = query.order_by(func.random()).limit(limit)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
+
     async def get_sticker_by_id(self, sticker_id: str) -> Optional[Sticker]:
         """根据ID获取表情包"""
         result = await self.db.execute(select(Sticker).where(Sticker.id == sticker_id))
@@ -100,12 +119,13 @@ class StickerService:
     ) -> List[Sticker]:
         """搜索表情包"""
         keyword = keyword.lower()
+
         query = select(Sticker).where(
             Sticker.is_active is True,
             (func.lower(Sticker.name).contains(keyword))
             | (func.lower(Sticker.description).contains(keyword))
-            | (Sticker.tags.any(keyword))
-            | (Sticker.keywords.any(keyword)),
+            | (func.json_extract(Sticker.tags, "$").contains(keyword))
+            | (func.json_extract(Sticker.keywords, "$").contains(keyword)),
         )
 
         if type:
@@ -190,6 +210,7 @@ class StickerService:
         self,
         emotion: StickerEmotion,
         personality: Optional[str] = None,
+        sticker_type: Optional[StickerType] = None,
         limit: int = 50,
     ) -> List[Sticker]:
         """根据情绪获取表情包"""
@@ -200,6 +221,9 @@ class StickerService:
                 (Sticker.personality_match == personality)
                 | (Sticker.personality_match == StickerPersonalityMatch.ALL)
             )
+
+        if sticker_type:
+            query = query.where(Sticker.type == sticker_type)
 
         # 按权重和成功率排序
         query = query.order_by(

@@ -92,40 +92,182 @@ class RuleBasedResponder:
     def __init__(self):
         self.rules: List[RuleReply] = []
         self._init_default_rules()
+        # 记录最近使用的回复，避免短时间内重复
+        self._recent_responses: OrderedDict[str, datetime] = OrderedDict()
+        self._max_recent = 20  # 最多记录最近20条回复
+        self._recent_ttl = timedelta(minutes=5)  # 5分钟内避免重复
 
     def _init_default_rules(self):
-        """初始化默认规则"""
+        """初始化默认规则 - 增加多样性"""
         self.rules.extend(
             [
                 RuleReply(
                     patterns=[r"^(你好|嗨|hello|hi|早上好|下午好|晚上好)\s*[!！?？]*$"],
-                    responses=["你好呀！", "嗨～", "哈喽哈喽", "害，来啦"],
+                    responses=[
+                        "你好呀！",
+                        "嗨～",
+                        "哈喽哈喽",
+                        "害，来啦",
+                        "哟，来啦",
+                        "嘿！",
+                        "来啦老弟",
+                        "👋 哈喽",
+                        "嗨害嗨",
+                        "哟哟哟",
+                    ],
                 ),
                 RuleReply(
                     patterns=[r"^(在吗|在不在)\s*[!！?？]*$"],
-                    responses=["在呢在呢", "害，我在", "怎么啦？"],
+                    responses=[
+                        "在呢在呢",
+                        "害，我在",
+                        "怎么啦？",
+                        "在的在的，啥事？",
+                        "在呢，你说",
+                        "在！",
+                        "在的呀",
+                        "在呢在呢，咋了",
+                    ],
                 ),
                 RuleReply(
                     patterns=[r"^(谢谢|感谢|多谢|thanks|thank you)\s*[!！?？]*$"],
-                    responses=["客气啥～", "害，小事儿", "不用谢啦"],
+                    responses=[
+                        "客气啥～",
+                        "害，小事儿",
+                        "不用谢啦",
+                        "谢啥谢",
+                        "这有啥",
+                        "客气了不是",
+                        "害，应该的",
+                        "不客气不客气",
+                        "小意思啦",
+                        "咱俩谁跟谁",
+                    ],
                 ),
                 RuleReply(
                     patterns=[r"^(再见|拜拜|bye|晚安)\s*[!！?？]*$"],
-                    responses=["拜拜～", "晚安晚安", "回见啦"],
+                    responses=[
+                        "拜拜～",
+                        "晚安晚安",
+                        "回见啦",
+                        "拜拜👋",
+                        "回头聊",
+                        "好嘞拜拜",
+                        "嗯嗯拜拜",
+                        "去吧去吧",
+                        "晚安好梦",
+                        "拜拜，早点休息",
+                    ],
                 ),
                 RuleReply(
-                    patterns=[r"^(哈哈|哈哈哈|笑死|绝了)\s*[!！?？]*$"],
-                    responses=["哈哈哈哈", "绝了绝了", "笑死我了😂"],
+                    patterns=[r"^(哈哈|哈哈哈|哈哈哈哈|哈哈哈哈哈+)\s*[!！?？]*$"],
+                    responses=[
+                        "哈哈哈哈",
+                        "绝了绝了",
+                        "笑死我了😂",
+                        "哈哈哈哈哈哈",
+                        "笑不活了",
+                        "哈哈哈哈嗝",
+                        "笑死",
+                        "😂😂😂",
+                        "哈哈哈哈有毒",
+                        "别笑了别笑了",
+                        "你笑啥呢",
+                        "啥事这么好笑",
+                        "哈哈哈哈哈哈停",
+                    ],
                 ),
                 RuleReply(
-                    patterns=[r"^(嗯|哦|好的|行|ok|好)\s*[!！?？.。]*$"],
-                    responses=["嗯嗯", "好哒", "害，行"],
+                    patterns=[r"^(笑死|绝了|卧槽|woc|wc|牛逼|牛|6|六)\s*[!！?？]*$"],
+                    responses=[
+                        "确实",
+                        "哈哈哈",
+                        "雀食",
+                        "我也觉得",
+                        "没毛病",
+                        "哈哈哈雀食",
+                        "绝了",
+                        "牛的",
+                        "可以可以",
+                        "👍",
+                        "哈哈哈哈",
+                        "有点东西",
+                    ],
+                ),
+                RuleReply(
+                    patterns=[r"^(嗯|哦|好的|行|ok|好|嗯嗯|哦哦)\s*[!！?？.。]*$"],
+                    responses=[
+                        "嗯嗯",
+                        "好哒",
+                        "害，行",
+                        "okk",
+                        "👌",
+                        "好嘞",
+                        "行吧",
+                        "嗯呢",
+                        "好的好的",
+                        "ojbk",
+                        "可以",
+                        "没问题",
+                    ],
+                ),
+                RuleReply(
+                    patterns=[r"^(？|\?|什么|啥|咋了|怎么了)\s*[!！?？]*$"],
+                    responses=[
+                        "咋了？",
+                        "嗯？",
+                        "咋回事",
+                        "咋啦",
+                        "？",
+                        "啥情况",
+                        "咋了这是",
+                        "咋",
+                        "咋回事儿",
+                        "咋了嘛",
+                    ],
+                ),
+                RuleReply(
+                    patterns=[r"^(哦豁|完了|惨了|糟糕|不好)\s*[!！?？]*$"],
+                    responses=[
+                        "咋了咋了",
+                        "咋回事",
+                        "咋了？",
+                        "咋搞的",
+                        "咋了这是",
+                        "咋了嘛",
+                        "咋回事儿",
+                        "咋了",
+                        "咋搞的这是",
+                        "咋了你说",
+                    ],
                 ),
             ]
         )
 
+    def _is_recently_used(self, response: str) -> bool:
+        """检查回复是否最近使用过"""
+        now = datetime.now()
+        # 清理过期的记录
+        expired_keys = [
+            key
+            for key, timestamp in self._recent_responses.items()
+            if now - timestamp > self._recent_ttl
+        ]
+        for key in expired_keys:
+            del self._recent_responses[key]
+
+        return response in self._recent_responses
+
+    def _record_response(self, response: str):
+        """记录已使用的回复"""
+        now = datetime.now()
+        self._recent_responses[response] = now
+        # 保持记录数量在限制内
+        while len(self._recent_responses) > self._max_recent:
+            self._recent_responses.popitem(last=False)
+
     def match(self, user_message: str, personality_id: str = "default") -> Optional[str]:
-        """匹配规则回复"""
+        """匹配规则回复 - 避免短时间内重复"""
         import random
 
         normalized_message = user_message.strip().lower()
@@ -133,7 +275,18 @@ class RuleBasedResponder:
         for rule in self.rules:
             for pattern in rule.patterns:
                 if re.match(pattern, normalized_message, re.IGNORECASE):
-                    return random.choice(rule.responses)
+                    # 过滤掉最近使用过的回复
+                    available_responses = [
+                        r for r in rule.responses if not self._is_recently_used(r)
+                    ]
+
+                    # 如果所有回复都最近用过，就用全部选项
+                    if not available_responses:
+                        available_responses = rule.responses
+
+                    response = random.choice(available_responses)
+                    self._record_response(response)
+                    return response
 
         return None
 
@@ -156,7 +309,7 @@ class CostOptimizer:
         self, user_message: str, personality_id: str, llm_callback: Callable[[], Any]
     ) -> Tuple[str, str]:
         """
-        处理消息，优先使用缓存或规则回复
+        处理消息，直接使用LLM生成回复（已移除规则回复）
 
         Args:
             user_message: 用户消息
@@ -164,15 +317,12 @@ class CostOptimizer:
             llm_callback: LLM回调函数
 
         Returns:
-            (回复内容, 来源: cache/rule/llm)
+            (回复内容, 来源: cache/llm)
         """
         self.stats["total_requests"] += 1
 
-        rule_response = self.rule_responder.match(user_message, personality_id)
-        if rule_response:
-            self.stats["rule_hits"] += 1
-            return rule_response, "rule"
-
+        # 规则回复已移除，直接使用LLM生成更自然的回复
+        # 保留缓存机制用于完全相同的输入
         cached_response = self.cache.get(user_message, personality_id)
         if cached_response:
             self.stats["cache_hits"] += 1
@@ -219,7 +369,7 @@ class CostOptimizer:
         llm_batch_callback: Callable[[List[Dict[str, str]]], Any],
     ) -> List[Tuple[str, str]]:
         """
-        批量处理消息，优化调用次数
+        批量处理消息，直接使用LLM生成回复（已移除规则回复）
 
         Args:
             messages: 消息列表，每个元素为 {"id": str, "content": str}
@@ -227,7 +377,7 @@ class CostOptimizer:
             llm_batch_callback: LLM批量回调函数，接收需要LLM处理的消息列表
 
         Returns:
-            回复列表，每个元素为 (回复内容, 来源: cache/rule/llm)
+            回复列表，每个元素为 (回复内容, 来源: cache/llm)
         """
         results = []
         llm_messages = []
@@ -238,12 +388,7 @@ class CostOptimizer:
             msg_id = msg.get("id", str(idx))
             msg_content = msg.get("content", "")
 
-            rule_response = self.rule_responder.match(msg_content, personality_id)
-            if rule_response:
-                self.stats["rule_hits"] += 1
-                results.append((rule_response, "rule"))
-                continue
-
+            # 规则回复已移除
             cached_response = self.cache.get(msg_content, personality_id)
             if cached_response:
                 self.stats["cache_hits"] += 1

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, relationship
 from app.models.base import BaseModel
 
 if TYPE_CHECKING:
+    from app.models.admin_user import AdminUser
     from app.models.user import User
 
 
@@ -61,6 +62,13 @@ class Account(BaseModel):
 
     # 关联的用户
     users: Mapped[List["User"]] = relationship("User", back_populates="account")
+
+    # 关联的管理员（多对多）
+    admin_users: Mapped[List["AdminUser"]] = relationship(
+        "AdminUser",
+        secondary="admin_account_associations",
+        back_populates="accounts",
+    )
 
     def __repr__(self) -> str:
         return f"<Account(id={self.id}, name={self.name}, platform={self.platform})>"

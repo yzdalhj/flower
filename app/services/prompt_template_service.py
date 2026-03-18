@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.prompt_template import PromptSection, PromptTemplate, PromptVariable
 
@@ -74,28 +75,34 @@ class PromptTemplateService:
     async def get_template(self, template_id: str) -> Optional[PromptTemplate]:
         """获取模板详情"""
         result = await self.session.execute(
-            select(PromptTemplate).where(PromptTemplate.id == template_id)
+            select(PromptTemplate)
+            .where(PromptTemplate.id == template_id)
+            .options(selectinload(PromptTemplate.sections))
         )
         return result.scalar_one_or_none()
 
     async def get_template_by_personality(self, personality_id: str) -> Optional[PromptTemplate]:
         """获取人格关联的默认模板"""
         result = await self.session.execute(
-            select(PromptTemplate).where(
+            select(PromptTemplate)
+            .where(
                 PromptTemplate.personality_id == personality_id,
                 PromptTemplate.is_default.is_(True),
                 PromptTemplate.is_active.is_(True),
             )
+            .options(selectinload(PromptTemplate.sections))
         )
         return result.scalar_one_or_none()
 
     async def get_default_template(self) -> Optional[PromptTemplate]:
         """获取系统默认模板"""
         result = await self.session.execute(
-            select(PromptTemplate).where(
+            select(PromptTemplate)
+            .where(
                 PromptTemplate.is_default.is_(True),
                 PromptTemplate.is_active.is_(True),
             )
+            .options(selectinload(PromptTemplate.sections))
         )
         return result.scalar_one_or_none()
 
@@ -107,7 +114,7 @@ class PromptTemplateService:
         limit: int = 100,
     ) -> List[PromptTemplate]:
         """列出模板"""
-        query = select(PromptTemplate)
+        query = select(PromptTemplate).options(selectinload(PromptTemplate.sections))
 
         if personality_id is not None:
             query = query.where(PromptTemplate.personality_id == personality_id)
