@@ -125,6 +125,8 @@ export interface Message {
   model_used?: string
   tokens_used?: number
   created_at?: string
+  sticker_url?: string
+  sticker_name?: string
 }
 
 export interface Conversation {
@@ -165,6 +167,8 @@ export interface ChatResponse {
   model_used: string
   tokens_used: number
   conversation_id?: string
+  sticker_url?: string
+  sticker_name?: string
 }
 
 export interface ChatHistoryResponse {

@@ -56,7 +56,9 @@
               </div>
               <div class="conversation-meta">
                 <span class="message-count">{{ conv.message_count }}条消息</span>
-                <span class="conversation-time">{{ formatTime(conv.last_message_at || conv.created_at) }}</span>
+                <span class="conversation-time">{{
+                  formatTime(conv.last_message_at || conv.created_at)
+                }}</span>
               </div>
             </div>
             <t-button
@@ -74,14 +76,10 @@
             <t-empty description="暂无对话记录" />
           </div>
         </div>
-
       </aside>
 
       <!-- 侧边栏切换按钮 -->
-      <div
-        class="sidebar-toggle"
-        @click="sidebarCollapsed = !sidebarCollapsed"
-      >
+      <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
         <t-icon :name="sidebarCollapsed ? 'chevron-right' : 'chevron-left'" />
       </div>
 
@@ -128,9 +126,21 @@
             <div class="message-avatar placeholder" v-else></div>
             <div class="message-content">
               <div class="message-bubble">
-                <div class="message-text">{{ message.content }}</div>
+                <div v-if="message.sticker_url" class="sticker-container">
+                  <img
+                    :src="message.sticker_url"
+                    :alt="message.sticker_name"
+                    class="sticker-image"
+                    @error="handleImageError"
+                  />
+                </div>
+                <div v-if="!message.sticker_url || message.content.trim()" class="message-text">
+                  {{ message.content }}
+                </div>
               </div>
-              <div class="message-time" v-if="!shouldShowAsSplit(message, index)">{{ formatTime(message.created_at) }}</div>
+              <div class="message-time" v-if="!shouldShowAsSplit(message, index)">
+                {{ formatTime(message.created_at) }}
+              </div>
             </div>
           </div>
 
@@ -215,20 +225,46 @@ const newSplitMessageVisibility = ref<Map<string, boolean>>(new Map())
 
 // 将消息按换行拆分（仅AI消息）
 const processedMessages = computed(() => {
-  const result: Array<{ role: string; content: string; created_at?: string; isSplit?: boolean; splitIndex?: number; splitGroupId?: string; isNew?: boolean }> = []
+  const result: Array<{
+    role: string
+    content: string
+    created_at?: string
+    isSplit?: boolean
+    splitIndex?: number
+    splitGroupId?: string
+    isNew?: boolean
+    sticker_url?: string
+    sticker_name?: string
+  }> = []
 
   chatStore.messages.forEach((message, msgIndex) => {
     // 判断是否是新消息（基于初始消息数量）
     const isNewMessage = msgIndex >= initialMessageCount.value
-
+    if (message.sticker_url) {
+      // 如果消息有表情包，先单独插入一条表情包消息
+      const groupId = `split-${msgIndex}-${message.created_at || Date.now()}`
+      result.push({
+        ...message,
+        role: message.role,
+        content: '',
+        created_at: message.created_at,
+        isSplit: false,
+        splitIndex: 0,
+        splitGroupId: groupId,
+        isNew: isNewMessage,
+      })
+    }
     if (message.role === 'assistant' && message.content.includes('\n')) {
       // AI消息包含换行，拆分为多条
-      const parts = message.content.split('\n').filter(part => part.trim())
+      const parts = message.content.split('\n').filter((part) => part.trim())
       const groupId = `split-${msgIndex}-${message.created_at || Date.now()}`
       parts.forEach((part, index) => {
         result.push({
+          ...message,
           role: message.role,
           content: part.trim(),
+          sticker_url: '',
+          sticker_name: '',
           created_at: message.created_at,
           isSplit: index > 0, // 标记为拆分后的消息（非第一条）
           splitIndex: index,
@@ -239,6 +275,8 @@ const processedMessages = computed(() => {
     } else {
       result.push({
         ...message,
+        sticker_url: '',
+        sticker_name: '',
         splitIndex: 0,
         splitGroupId: `normal-${msgIndex}`,
         isNew: isNewMessage,
@@ -260,7 +298,9 @@ const shouldShowMessage = (message: any): boolean => {
   // 历史消息或非拆分消息直接显示
   if (!message.isNew || !message.isSplit) return true
   // 新消息的拆分消息需要检查是否已标记为可见
-  return newSplitMessageVisibility.value.get(`${message.splitGroupId}-${message.splitIndex}`) || false
+  return (
+    newSplitMessageVisibility.value.get(`${message.splitGroupId}-${message.splitIndex}`) || false
+  )
 }
 
 // 处理新消息的拆分消息延迟显示
@@ -284,35 +324,38 @@ const handleNewSplitMessage = (messageIndex: number) => {
 }
 
 // 监听新消息
-watch(() => chatStore.messages.length, (newLength, oldLength) => {
-  // 初始化时记录初始消息数量
-  if (oldLength === undefined && newLength > 0) {
-    initialMessageCount.value = newLength
-    scrollToBottom()
-    return
-  }
-
-  // 只处理真正的新消息（长度增加时）
-  if (newLength > (oldLength || 0)) {
-    // 只处理新增的最后一条消息
-    const newMessageIndex = newLength - 1
-    handleNewSplitMessage(newMessageIndex)
-
-    // 计算最长延迟：最后一条拆分消息显示完成后滚动到底部
-    const lastMessage = chatStore.messages[newMessageIndex]
-    if (lastMessage && lastMessage.content.includes('\n')) {
-      const parts = lastMessage.content.split('\n').filter(part => part.trim())
-      const maxDelay = parts.length * 800 + 100
-      setTimeout(() => {
-        scrollToBottom()
-      }, maxDelay)
-    } else {
-      setTimeout(() => {
-        scrollToBottom()
-      }, 100)
+watch(
+  () => chatStore.messages.length,
+  (newLength, oldLength) => {
+    // 初始化时记录初始消息数量
+    if (oldLength === undefined && newLength > 0) {
+      initialMessageCount.value = newLength
+      scrollToBottom()
+      return
     }
-  }
-})
+
+    // 只处理真正的新消息（长度增加时）
+    if (newLength > (oldLength || 0)) {
+      // 只处理新增的最后一条消息
+      const newMessageIndex = newLength - 1
+      handleNewSplitMessage(newMessageIndex)
+
+      // 计算最长延迟：最后一条拆分消息显示完成后滚动到底部
+      const lastMessage = chatStore.messages[newMessageIndex]
+      if (lastMessage && lastMessage.content.includes('\n')) {
+        const parts = lastMessage.content.split('\n').filter((part) => part.trim())
+        const maxDelay = parts.length * 800 + 100
+        setTimeout(() => {
+          scrollToBottom()
+        }, maxDelay)
+      } else {
+        setTimeout(() => {
+          scrollToBottom()
+        }, 100)
+      }
+    }
+  },
+)
 
 // 判断是否显示为拆分消息（连续相同角色的消息，除第一条外都隐藏头像）
 const shouldShowAsSplit = (message: any, index: number) => {
@@ -402,7 +445,7 @@ const deleteConversation = (conv: Conversation) => {
         // await chatApi.deleteConversation(conv.id)
 
         // 从列表中移除
-        conversations.value = conversations.value.filter(c => c.id !== conv.id)
+        conversations.value = conversations.value.filter((c) => c.id !== conv.id)
 
         // 如果删除的是当前会话，清空消息
         if (conv.id === chatStore.currentConversationId) {
@@ -434,7 +477,7 @@ const onAccountChange = async (value: string) => {
   // 重新加载该账号的会话列表
   await loadConversations()
 
-  MessagePlugin.success(`已切换到账号: ${accountStore.accounts.find(a => a.id === value)?.name}`)
+  MessagePlugin.success(`已切换到账号: ${accountStore.accounts.find((a) => a.id === value)?.name}`)
 }
 
 const startWithPrompt = async (prompt: string) => {
@@ -485,6 +528,17 @@ const formatTime = (time: string | undefined) => {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+const handleImageError = (event: Event) => {
+  console.warn('[Sticker] 图片加载失败:', (event.target as HTMLImageElement).src)
+}
+
+const hasOnlySticker = (content: string): boolean => {
+  const trimmed = content.trim()
+  if (!trimmed) return true
+  const emojiRegex = /^[\p{Emoji}\s]+$/u
+  return emojiRegex.test(trimmed) && trimmed.length <= 4
 }
 </script>
 
@@ -716,8 +770,13 @@ const formatTime = (time: string | undefined) => {
 }
 
 @keyframes bounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 .welcome-title {
@@ -815,6 +874,14 @@ const formatTime = (time: string | undefined) => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.sticker-container .sticker-image {
+  display: block;
+}
+
+.sticker-container:has(.message-text) {
+  padding-bottom: 4px;
+}
+
 .message-item.user .message-bubble {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -834,6 +901,34 @@ const formatTime = (time: string | undefined) => {
 .message-text {
   line-height: 1.6;
   font-size: 15px;
+}
+
+.sticker-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sticker-image {
+  max-width: 240px;
+  max-height: 240px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  display: block;
+  background: transparent;
+}
+
+.sticker-image:hover {
+  transform: scale(1.02);
+}
+
+.message-item.assistant .sticker-image {
+  background: transparent;
+}
+
+.message-item.user .sticker-image {
+  background: transparent;
 }
 
 .message-time {
