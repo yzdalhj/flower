@@ -24,6 +24,7 @@ from app.core import init_db, init_default_admin
 from app.core.init_prompt_template import init_default_prompt_template, init_prompt_variables
 from app.core.session import AsyncSessionLocal
 from app.services.active_behavior import scheduler
+from app.services.sticker import init_default_stickers
 
 
 @asynccontextmanager
@@ -52,6 +53,12 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as db:
         await init_prompt_variables(db)
         await init_default_prompt_template(db)
+    print("✓")
+
+    # 初始化默认表情包
+    print("║  😊 正在初始化表情包...", end=" ")
+    async with AsyncSessionLocal() as db:
+        await init_default_stickers(db)
     print("✓")
 
     # 初始化向量数据库

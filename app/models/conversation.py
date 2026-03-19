@@ -69,6 +69,8 @@ class Message(BaseModel):
 
     # 表情包（如果有）
     sticker_id: Mapped[int | None] = Column(Integer, ForeignKey("stickers.id"), nullable=True)
+    sticker_url: Mapped[str | None] = Column(String(500), nullable=True)
+    sticker_name: Mapped[str | None] = Column(String(100), nullable=True)
 
     # 使用的模型
     model_used: Mapped[str | None] = Column(String(100), nullable=True)

@@ -104,6 +104,8 @@ async def get_history(
                 "content": msg.content,
                 "created_at": msg.created_at.isoformat(),
                 "sticker_id": msg.sticker_id,
+                "sticker_url": msg.sticker_url,
+                "sticker_name": msg.sticker_name,
             }
             for msg in messages
         ],

@@ -177,6 +177,12 @@ class DynamicStickerLibrary:
                 image_url = item.get("url", "")
                 category = item.get("category", "")
 
+                # 转换 GitHub raw 到 jsdelivr CDN 加速（国内访问更快）
+                # raw.githubusercontent.com -> cdn.jsdelivr.net/gh
+                image_url = image_url.replace(
+                    "https://raw.githubusercontent.com/", "https://cdn.jsdelivr.net/gh/"
+                )
+
                 if not name or not image_url:
                     continue
 

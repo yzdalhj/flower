@@ -59,7 +59,7 @@ class StickerService:
         """随机获取表情包"""
         from sqlalchemy import func
 
-        query = select(Sticker).where(Sticker.is_active is True)
+        query = select(Sticker).where(Sticker.is_active == True)
 
         if type:
             query = query.where(Sticker.type == type)
@@ -121,7 +121,7 @@ class StickerService:
         keyword = keyword.lower()
 
         query = select(Sticker).where(
-            Sticker.is_active is True,
+            Sticker.is_active == True,
             (func.lower(Sticker.name).contains(keyword))
             | (func.lower(Sticker.description).contains(keyword))
             | (func.json_extract(Sticker.tags, "$").contains(keyword))
@@ -214,7 +214,7 @@ class StickerService:
         limit: int = 50,
     ) -> List[Sticker]:
         """根据情绪获取表情包"""
-        query = select(Sticker).where(Sticker.is_active is True, Sticker.emotion == emotion)
+        query = select(Sticker).where(Sticker.is_active == True, Sticker.emotion == emotion)
 
         if personality:
             query = query.where(
@@ -252,13 +252,13 @@ class StickerService:
     async def get_statistics(self) -> dict:
         """获取表情包统计信息"""
         # 总数量
-        total = await self.db.scalar(select(func.count()).where(Sticker.is_active is True))
+        total = await self.db.scalar(select(func.count()).where(Sticker.is_active == True))
 
         # 按类型统计
         type_stats = {}
         for sticker_type in StickerType:
             count = await self.db.scalar(
-                select(func.count()).where(Sticker.is_active is True, Sticker.type == sticker_type)
+                select(func.count()).where(Sticker.is_active == True, Sticker.type == sticker_type)
             )
             type_stats[sticker_type.value] = count
 
@@ -266,14 +266,14 @@ class StickerService:
         emotion_stats = {}
         for emotion in StickerEmotion:
             count = await self.db.scalar(
-                select(func.count()).where(Sticker.is_active is True, Sticker.emotion == emotion)
+                select(func.count()).where(Sticker.is_active == True, Sticker.emotion == emotion)
             )
             emotion_stats[emotion.value] = count
 
         # 总使用次数
         total_usage = (
             await self.db.scalar(
-                select(func.sum(Sticker.usage_count)).where(Sticker.is_active is True)
+                select(func.sum(Sticker.usage_count)).where(Sticker.is_active == True)
             )
             or 0
         )

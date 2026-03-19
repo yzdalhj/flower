@@ -190,6 +190,11 @@ class DialogueProcessor:
         # 如果回复太长，拆分成多条短消息
         message_parts = self._split_long_message(llm_response.content)
 
+        # 获取表情包信息（只在第一条消息中保存）
+        first_sticker_id = sticker.id if sticker else None
+        first_sticker_url = sticker.url if sticker else None
+        first_sticker_name = sticker.name if sticker else None
+
         for i, part in enumerate(message_parts):
             await self._save_message(
                 conversation.id,
@@ -197,6 +202,9 @@ class DialogueProcessor:
                 part,
                 model_used=llm_response.model if i == 0 else f"{llm_response.model}-part{i+1}",
                 tokens_used=llm_response.tokens_used // len(message_parts) if i == 0 else 0,
+                sticker_id=first_sticker_id if i == 0 else None,
+                sticker_url=first_sticker_url if i == 0 else None,
+                sticker_name=first_sticker_name if i == 0 else None,
             )
             # 每个消息保存后立即提交，让前端能读到最新数据
             await self.session.commit()
@@ -326,6 +334,8 @@ class DialogueProcessor:
         model_used: Optional[str] = None,
         tokens_used: Optional[int] = None,
         sticker_id: Optional[int] = None,
+        sticker_url: Optional[str] = None,
+        sticker_name: Optional[str] = None,
     ) -> Message:
         """保存消息"""
         from sqlalchemy import select
@@ -340,6 +350,8 @@ class DialogueProcessor:
             model_used=model_used,
             tokens_used=tokens_used,
             sticker_id=sticker_id,
+            sticker_url=sticker_url,
+            sticker_name=sticker_name,
         )
         self.session.add(message)
         await self.session.commit()

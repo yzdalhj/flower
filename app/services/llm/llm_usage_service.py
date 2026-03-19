@@ -141,6 +141,13 @@ class LLMUsageService:
                 stat_date=stat_date,
                 provider=record.provider,
                 model=record.model,
+                total_requests=0,
+                total_prompt_tokens=0,
+                total_completion_tokens=0,
+                total_tokens=0,
+                total_cost=0.0,
+                success_count=0,
+                error_count=0,
             )
             self.session.add(stat)
 
