@@ -8,9 +8,10 @@ from app.config import get_settings
 settings = get_settings()
 
 # 创建异步引擎
+echo_sql = settings.LOG_LEVEL in ["DEBUG", "INFO"]
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=echo_sql,
     future=True,
 )
 

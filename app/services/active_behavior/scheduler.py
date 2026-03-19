@@ -36,7 +36,6 @@ class ActiveBehaviorScheduler:
             return
 
         self.running = True
-        print("✅ 主动行为调度器已启动")
 
         # 启动定时任务
         self.tasks.append(asyncio.create_task(self._daily_check_task()))
@@ -56,7 +55,6 @@ class ActiveBehaviorScheduler:
                 pass
 
         self.tasks.clear()
-        print("✅ 主动行为调度器已停止")
 
     async def _daily_check_task(self):
         """每日检查任务：每天凌晨1点执行"""

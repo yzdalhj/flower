@@ -18,11 +18,24 @@ from app.api import (
     settings_router,
     sticker_router,
     user_router,
+    wechat_router,
 )
 from app.config import get_settings
 from app.core import init_db, init_default_admin
+from app.core.banner import (
+    print_banner,
+    print_info,
+    print_platforms,
+    print_ready,
+    print_schedulers_started,
+    print_shutdown,
+    print_success,
+)
 from app.core.init_prompt_template import init_default_prompt_template, init_prompt_variables
 from app.core.session import AsyncSessionLocal
+from app.platform.adapters.wechat_client import WechatClientAdapter
+from app.platform.adapters.wechat_official import WechatOfficialAdapter
+from app.platform.gateway import get_gateway
 from app.services.active_behavior import scheduler
 from app.services.sticker import init_default_stickers
 
@@ -32,78 +45,77 @@ async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     settings = get_settings()
 
-    # 启动时
-    print("╔" + "═" * 50)
-    print(f"║  🌸 {settings.APP_NAME} v{app.version}")
-    print("╠" + "═" * 50)
+    print_banner(settings.APP_NAME, "0.1.0")
 
-    # 初始化数据库
-    print("║  📦 正在初始化数据库...", end=" ")
     await init_db()
-    print("✓")
+    print_success("Database initialized")
 
-    # 初始化默认管理员账号
-    print("║  👤 正在初始化管理员账号...", end=" ")
+    init_steps = []
     async with AsyncSessionLocal() as db:
-        await init_default_admin(db)
-    print("✓")
+        if settings.INIT_ADMIN:
+            await init_default_admin(db)
+            init_steps.append("admin")
+        if settings.INIT_PROMPT_TEMPLATES:
+            await init_prompt_variables(db)
+            await init_default_prompt_template(db)
+            init_steps.append("prompt templates")
+        if settings.INIT_STICKERS:
+            await init_default_stickers(db)
+            init_steps.append("stickers")
 
-    # 初始化默认Prompt模板
-    print("║  📝 正在初始化Prompt模板...", end=" ")
-    async with AsyncSessionLocal() as db:
-        await init_prompt_variables(db)
-        await init_default_prompt_template(db)
-    print("✓")
+    if init_steps:
+        print_success(f"Core data initialized: {', '.join(init_steps)}")
+    else:
+        print_info("Core data init skipped")
 
-    # 初始化默认表情包
-    print("║  😊 正在初始化表情包...", end=" ")
-    async with AsyncSessionLocal() as db:
-        await init_default_stickers(db)
-    print("✓")
-
-    # 初始化向量数据库
-    # TODO: 初始化ChromaDB
-
-    # 启动主动行为调度器
-    print("║  ⏰ 正在启动主动行为调度器...", end=" ")
     await scheduler.start()
-    print("✓")
-
-    # 启动记忆调度器
-    print("║  🧠 正在启动记忆调度器...", end=" ")
     from app.services.memory.memory_scheduler import get_memory_scheduler
 
     memory_scheduler = get_memory_scheduler()
     await memory_scheduler.start()
-    print("✓")
+    print_schedulers_started(["Active Behavior", "Memory"])
 
-    print("╚" + "═" * 50)
-    print("✨ 服务已启动，访问 http://localhost:8000/docs 查看文档")
-    print()
+    gateway = get_gateway()
+
+    platforms = []
+    if settings.WECHAT_OFFICIAL_TOKEN:
+        adapter = WechatOfficialAdapter(
+            token=settings.WECHAT_OFFICIAL_TOKEN,
+            app_id=settings.WECHAT_OFFICIAL_APP_ID,
+            app_secret=settings.WECHAT_OFFICIAL_APP_SECRET,
+        )
+        gateway.register_adapter(adapter)
+        platforms.append("WeChat Official")
+
+    if settings.WECHAT_CLIENT_ENABLED:
+        client_adapter = WechatClientAdapter(
+            host=settings.WECHAT_CLIENT_HOST,
+            port=settings.WECHAT_CLIENT_PORT,
+        )
+        gateway.register_adapter(client_adapter)
+        platforms.append(
+            f"WeChat Client ({settings.WECHAT_CLIENT_HOST}:{settings.WECHAT_CLIENT_PORT})"
+        )
+
+    print_platforms(platforms)
+
+    extra_info = {}
+    if platforms:
+        extra_info["平台"] = ", ".join(platforms)
+
+    print_ready(port=8000, docs_url="/docs", extra_info=extra_info)
 
     yield
 
     # 关闭时
-    print()
-    print("╔" + "═" * 50)
-    print(f"║  🛑 {settings.APP_NAME} 正在关闭...")
-    print("╠" + "═" * 50)
-
-    print("║  ⏰ 正在停止主动行为调度器...", end=" ")
+    print_shutdown(settings.APP_NAME)
     await scheduler.stop()
-    print("✓")
-
-    print("║  🧠 正在停止记忆调度器...", end=" ")
     await memory_scheduler.stop()
-    print("✓")
-
-    print("╚" + "═" * 50)
-    print(f"👋 感谢使用 {settings.APP_NAME}！")
 
 
 app = FastAPI(
     title="AI小花 API",
-    description="智能陪伴助手 API",
+    description="智能助手 API",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -147,3 +159,4 @@ app.include_router(memory_router)
 app.include_router(user_router)
 app.include_router(llm_usage_router)
 app.include_router(personality_config_router)
+app.include_router(wechat_router)

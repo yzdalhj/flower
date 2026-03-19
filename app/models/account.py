@@ -30,6 +30,8 @@ class Account(BaseModel):
     enable_text: Mapped[bool] = Column(Boolean, default=True)
     enable_emoji: Mapped[bool] = Column(Boolean, default=True)
     enable_voice: Mapped[bool] = Column(Boolean, default=False)
+    enable_voice_call: Mapped[bool] = Column(Boolean, default=False)
+    enable_video_call: Mapped[bool] = Column(Boolean, default=False)
     enable_image: Mapped[bool] = Column(Boolean, default=True)
     enable_proactive: Mapped[bool] = Column(Boolean, default=True)
     enable_learning: Mapped[bool] = Column(Boolean, default=True)

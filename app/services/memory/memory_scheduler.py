@@ -27,7 +27,6 @@ class MemoryScheduler:
             return
 
         self.running = True
-        print("[MemoryScheduler] 记忆调度器已启动")
 
         # 启动定时任务
         self.tasks = [
@@ -41,7 +40,6 @@ class MemoryScheduler:
         for task in self.tasks:
             task.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
-        print("[MemoryScheduler] 记忆调度器已停止")
 
     async def _consolidation_loop(self):
         """记忆整合循环 - 每小时执行一次"""

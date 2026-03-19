@@ -12,6 +12,7 @@ from app.api.prompt_template import router as prompt_template_router
 from app.api.settings import router as settings_router
 from app.api.sticker import router as sticker_router
 from app.api.user import router as user_router
+from app.api.wechat import router as wechat_router
 
 __all__ = [
     "chat_router",
@@ -26,4 +27,5 @@ __all__ = [
     "llm_usage_router",
     "auth_router",
     "personality_config_router",
+    "wechat_router",
 ]
